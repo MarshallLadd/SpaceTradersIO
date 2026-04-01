@@ -80,6 +80,13 @@ ui/         ← Compose screens and ViewModels (androidx.lifecycle)
 
 Ktor and `kotlinx-serialization` are **not yet added** — they are the next dependency milestone. When adding them, declare versions in `gradle/libs.versions.toml` and use engine `okhttp` for Android and `darwin` for iOS.
 
+## Gotchas
+
+- `gradlew` must have the executable bit set in git (`git update-index --chmod=+x gradlew`). Windows does not preserve Unix permissions — omitting this causes CI to fail with exit code 126.
+- The repo root IS the KMP project root. Git was initialized inside `KMP/`, so there is no `KMP/` subdirectory on CI runners or in the repo. Do not use `working-directory: KMP` in GitHub Actions workflows.
+- In Koin 4.x, the Compose Multiplatform artifact is `io.insert-koin:koin-compose`, not `koin-compose-multiplatform` (that artifact does not exist on Maven Central).
+- `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`.
+
 ## SpaceTraders API
 
 - Base URL: `https://api.spacetraders.io/v2`
