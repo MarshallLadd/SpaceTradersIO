@@ -1,0 +1,45 @@
+name: Develop Build
+
+# Runs automatically whenever a branch is merged into develop.
+# Confirms the integration branch always produces a valid, installable debug APK.
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  build-debug-apk:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # Check out the repository at the commit that triggered the push.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Use JDK 17 (Temurin distribution) — minimum required by AGP 8.x.
+      # Temurin is the open-source Eclipse build of OpenJDK, recommended for CI.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Gradle's official action. Automatically caches the Gradle home directory
+      # and build outputs between runs to speed up subsequent builds.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # Assemble the debug APK. This runs the full Android build pipeline:
+      # resource processing, manifest merging, compilation, and packaging.
+      - name: Build debug APK
+        run: ./gradlew :composeApp:assembleDebug
+
+      # Upload the APK as a downloadable artifact in the Actions UI.
+      # Keyed by commit SHA so each build is traceable to an exact commit.
+      # Retained for 7 days — long enough for review without accumulating indefinitely.
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-${{ github.sha }}
+          path: composeApp/build/outputs/apk/debug/*.apk
+          retention-days: 7
