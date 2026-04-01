@@ -39,10 +39,8 @@ jobs:
       # Catches type errors and misconfigured dependencies before running tests.
       - name: Compile
         run: ./gradlew :composeApp:compileDebugKotlinAndroid
-        working-directory: KMP
 
       # Run all unit tests in the debug variant.
       # Tests live in commonTest and are compiled to run on the JVM here.
       - name: Unit tests
         run: ./gradlew :composeApp:testDebugUnitTest
-        working-directory: KMP
