@@ -35,11 +35,6 @@ git push -u origin feature/my-feature
 
 All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead of `./gradlew`.
 
-`JAVA_HOME` must point to the Android Studio JDK when running from a shell that doesn't inherit the IDE's environment:
-```bash
-export JAVA_HOME="/c/Users/laddm/AppData/Local/Programs/Android Studio/jbr"
-```
-
 ```bash
 # Build Android debug APK
 ./gradlew :composeApp:assembleDebug
