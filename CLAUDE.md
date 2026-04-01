@@ -8,6 +8,29 @@ SpaceTraders is a Kotlin Multiplatform (KMP) client for the [SpaceTraders IO](ht
 
 **Targets:** Android (minSdk 28) and iOS (arm64 + simulator). Desktop/web are out of scope for now.
 
+## Git Branching Strategy
+
+This project follows Git Flow:
+
+- **`main`** — production-ready releases only. Never commit directly.
+- **`develop`** — integration branch. All feature/bugfix work merges here first.
+- **`feature/<name>`** — branched from `develop`, merged back to `develop` via PR.
+- **`bugfix/<name>`** — branched from `develop`, merged back to `develop` via PR.
+- **`release/<version>`** — branched from `develop` when cutting a release, merged into both `main` and `develop`.
+- **`hotfix/<name>`** — branched from `main` for critical production fixes, merged into both `main` and `develop`.
+
+```bash
+# Start a new feature
+git checkout develop && git pull
+git checkout -b feature/my-feature
+
+# Finish and push for PR
+git push -u origin feature/my-feature
+# Open PR targeting develop (GitHub default)
+```
+
+`develop` is the default branch on GitHub — all PRs target it automatically.
+
 ## Build Commands
 
 All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead of `./gradlew`.
