@@ -46,7 +46,7 @@ All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead
 ./gradlew :composeApp:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetraders.MyTest"
 
 # Sync and check the build without assembling
-./gradlew :composeApp:compileKotlinAndroid
+./gradlew :composeApp:compileDebugKotlinAndroid
 ```
 
 iOS is built from Xcode using `iosApp/iosApp.xcodeproj` or via the IDE run configuration.
