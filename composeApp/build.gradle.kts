@@ -1,5 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import com.android.build.api.dsl.ApplicationExtension
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -66,7 +67,7 @@ kotlin {
     }
 }
 
-android {
+configure<ApplicationExtension> {
     namespace = "com.brokenhuskysledteam.spacetraders"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
