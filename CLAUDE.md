@@ -77,8 +77,12 @@ ui/         ← Compose screens and ViewModels (androidx.lifecycle)
 | Compose Multiplatform | 1.10.0 |
 | AGP | 8.11.2 |
 | androidx.lifecycle (ViewModel/runtime) | 2.9.6 |
+| Ktor | 3.4.2 |
+| kotlinx-serialization | 1.10.0 |
+| Koin | 4.2.0 |
+| multiplatform-settings | 1.3.0 |
 
-Ktor and `kotlinx-serialization` are **not yet added** — they are the next dependency milestone. When adding them, declare versions in `gradle/libs.versions.toml` and use engine `okhttp` for Android and `darwin` for iOS.
+Ktor uses the `okhttp` engine for Android and `darwin` for iOS — both are already wired in `gradle/libs.versions.toml`.
 
 ## Gotchas
 

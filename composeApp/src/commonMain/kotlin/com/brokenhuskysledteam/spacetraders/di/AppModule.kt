@@ -3,8 +3,12 @@ package com.brokenhuskysledteam.spacetraders.di
 import com.brokenhuskysledteam.spacetraders.api.client.SpaceTradersClient
 import com.brokenhuskysledteam.spacetraders.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetraders.api.endpoints.AgentsApi
+import com.brokenhuskysledteam.spacetraders.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetraders.data.repository.TokenRepositoryImpl
 import com.brokenhuskysledteam.spacetraders.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetraders.domain.usecase.AcceptContractUseCase
+import com.brokenhuskysledteam.spacetraders.domain.usecase.FulfillContractUseCase
+import com.brokenhuskysledteam.spacetraders.domain.usecase.GetMyContractsUseCase
 import com.brokenhuskysledteam.spacetraders.domain.usecase.RegisterAgentUseCase
 import com.russhwolf.settings.Settings
 import org.koin.dsl.module
@@ -27,7 +31,11 @@ val appModule = module {
     // API endpoint classes — each takes the relevant HttpClient from the manager.
     single { AccountsApi(get<SpaceTradersClient>().unauthenticated) }
     single { AgentsApi(get<SpaceTradersClient>().authenticated) }
+    single { ContractsApi(get<SpaceTradersClient>().authenticated) }
 
     // Use cases
     single { RegisterAgentUseCase(get(), get()) }
+    single { GetMyContractsUseCase(get()) }
+    single { AcceptContractUseCase(get()) }
+    single { FulfillContractUseCase(get()) }
 }
