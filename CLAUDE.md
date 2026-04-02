@@ -84,6 +84,14 @@ ui/         ← Compose screens and ViewModels (androidx.lifecycle)
 
 Ktor uses the `okhttp` engine for Android and `darwin` for iOS — both are already wired in `gradle/libs.versions.toml`.
 
+## Testing
+
+Tests live in `composeApp/src/commonTest/`. Test dependencies in `build.gradle.kts` commonTest block: `kotlin.test`, `ktor-client-mock`, `kotlinx-coroutines-test`.
+
+- **Pure unit tests** (mappers, enums): no extra setup needed beyond `kotlin.test`
+- **Use case tests**: back `AccountsApi`/`ContractsApi` with Ktor `MockEngine`; use hand-written fakes for repository interfaces (no mockk); use `runTest` for suspend functions
+- **Test `HttpClient` must include `defaultRequest { contentType(ContentType.Application.Json) }`** — omitting it causes `Fail to prepare request body` because `setBody()` requires Content-Type, matching the production `SpaceTradersClient` setup
+
 ## Gotchas
 
 - `gradlew` must have the executable bit set in git (`git update-index --chmod=+x gradlew`). Windows does not preserve Unix permissions — omitting this causes CI to fail with exit code 126.
