@@ -78,3 +78,5 @@ ehthumbs.db
 # ============================================================
 *.log
 node_modules/
+
+.claude/settings.local.json
