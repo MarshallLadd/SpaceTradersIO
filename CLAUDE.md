@@ -53,7 +53,7 @@ iOS is built from Xcode using `iosApp/iosApp.xcodeproj` or via the IDE run confi
 
 ## Architecture
 
-Single Gradle module (`composeApp`) with three source sets:
+Two Gradle modules: `:composeApp` (KMP shared library) and `:androidApp` (Android entry point). `:composeApp` has three source sets:
 
 - **`commonMain`** — all shared logic: API layer, domain models, ViewModels, and Compose UI screens. This is where most code lives.
 - **`androidMain`** — Platform actuals (`Platform.android.kt`). Entry point (`MainActivity`, `SpaceTradersApplication`) lives in the `:androidApp` module.
@@ -73,10 +73,10 @@ ui/         ← Compose screens and ViewModels (androidx.lifecycle)
 
 | Dependency | Version |
 |---|---|
-| Kotlin | 2.3.0 |
-| Compose Multiplatform | 1.10.0 |
-| AGP | 8.11.2 |
-| androidx.lifecycle (ViewModel/runtime) | 2.9.6 |
+| Kotlin | 2.3.20 |
+| Compose Multiplatform | 1.10.3 |
+| AGP | 9.1.0 |
+| androidx.lifecycle (ViewModel/runtime) | 2.10.0 |
 | Ktor | 3.4.2 |
 | kotlinx-serialization | 1.10.0 |
 | Koin | 4.2.0 |
