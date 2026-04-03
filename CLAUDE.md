@@ -37,7 +37,7 @@ All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead
 
 ```bash
 # Build Android debug APK
-./gradlew :composeApp:assembleDebug
+./gradlew :androidApp:assembleDebug
 
 # Run all common tests
 ./gradlew :composeApp:testDebugUnitTest
@@ -56,7 +56,7 @@ iOS is built from Xcode using `iosApp/iosApp.xcodeproj` or via the IDE run confi
 Single Gradle module (`composeApp`) with three source sets:
 
 - **`commonMain`** — all shared logic: API layer, domain models, ViewModels, and Compose UI screens. This is where most code lives.
-- **`androidMain`** — Android entry point (`MainActivity`) and platform actuals.
+- **`androidMain`** — Platform actuals (`Platform.android.kt`). Entry point (`MainActivity`, `SpaceTradersApplication`) lives in the `:androidApp` module.
 - **`iosMain`** — iOS entry point (`MainViewController`) and platform actuals.
 
 The `expect/actual` mechanism in `Platform.kt` is the current example of platform-specific behaviour.
