@@ -106,6 +106,16 @@ Tests live in `composeApp/src/commonTest/`. Test dependencies in `build.gradle.k
 - The OpenAPI spec (`../OpenAPISpec/space_trader_open_api_spec.json`) is the ground truth — always check it before implementing a new endpoint.
 - Pagination is used extensively: requests accept `page` and `limit`, responses include a `meta` object with `total`, `page`, `limit`.
 
+## Mobile MCP (Android Emulator Interaction)
+
+The `mobile-mcp` MCP server enables live interaction with the running Android emulator.
+
+- **Always use `mobile_list_elements_on_screen` for click targets** — never estimate coordinates from screenshots. Screenshots render at half native resolution (e.g. 720px wide) but element coordinates are in native pixel space (1080px). Guessing from screenshots will miss.
+- **Workflow:** `mobile_list_elements_on_screen` → get coordinates → `mobile_click_on_screen_at_coordinates` → `mobile_take_screenshot` to verify.
+- **Always call `mobile_list_available_devices` first** — never assume a device ID; the connected device changes frequently.
+- **Windows gotcha:** The MCP server command must use a `cmd /c` wrapper — `command: "cmd", args: ["/c", "npx", "@mobilenext/mobile-mcp@latest"]` in `.claude.json`. Plain `npx` is a `.cmd` script and cannot be spawned directly on Windows.
+- MCP servers connect at session startup — config changes require a session restart to take effect.
+
 ## Gradle Config Notes
 
 - Configuration cache and build cache are both enabled (`gradle.properties`).
