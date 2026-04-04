@@ -32,7 +32,7 @@ jobs:
       # Assemble the debug APK. This runs the full Android build pipeline:
       # resource processing, manifest merging, compilation, and packaging.
       - name: Build debug APK
-        run: ./gradlew :composeApp:assembleDebug
+        run: ./gradlew :app:assembleDebug
 
       # Upload the APK as a downloadable artifact in the Actions UI.
       # Keyed by commit SHA so each build is traceable to an exact commit.
@@ -41,5 +41,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk-${{ github.sha }}
-          path: composeApp/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
