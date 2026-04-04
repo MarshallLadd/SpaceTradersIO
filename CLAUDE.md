@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SpaceTraders is a Kotlin Multiplatform (KMP) client for the [SpaceTraders IO](https://spacetraders.io) REST API MMO. The full OpenAPI spec lives at `../OpenAPISpec/space_trader_open_api_spec.json` relative to this directory and is the authoritative reference for all API endpoints, request/response shapes, and auth schemes.
+SpaceTraders is a Kotlin Multiplatform (KMP) SDK and Android client for the [SpaceTraders IO](https://spacetraders.io) REST API MMO. The full OpenAPI spec lives at `../OpenAPISpec/space_trader_open_api_spec.json` relative to this directory and is the authoritative reference for all API endpoints, request/response shapes, and auth schemes.
 
-**Targets:** Android (minSdk 28) and iOS (arm64 + simulator). Desktop/web are out of scope for now.
+**Targets:** The SDK targets Android (minSdk 28) and iOS (arm64 + simulator). The Android app is a standalone Jetpack Compose application. An iOS app will consume the SDK's xcframework natively. Desktop/web are out of scope.
 
 ## Git Branching Strategy
 
@@ -37,36 +37,41 @@ All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead
 
 ```bash
 # Build Android debug APK
-./gradlew :androidApp:assembleDebug
+./gradlew :app:assembleDebug
 
-# Run all common tests
-./gradlew :composeApp:testDebugUnitTest
+# Run all SDK common tests
+./gradlew :spacetradersiosdk:testDebugUnitTest
 
 # Run a single test class
-./gradlew :composeApp:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetraders.MyTest"
+./gradlew :spacetradersiosdk:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetraders.MyTest"
 
 # Sync and check the build without assembling
-./gradlew :composeApp:compileDebugKotlinAndroid
+./gradlew :spacetradersiosdk:compileDebugKotlinAndroid
 ```
 
-iOS is built from Xcode using `iosApp/iosApp.xcodeproj` or via the IDE run configuration.
+iOS framework is built via `./gradlew :spacetradersiosdk:assembleSpacetradersiosdkKitReleaseXCFramework`. There is no iOS app in this repo yet — the SDK produces an xcframework (`spacetradersiosdkKit`) for consumption by a native Swift/Xcode project.
 
 ## Architecture
 
-Two Gradle modules: `:composeApp` (KMP shared library) and `:androidApp` (Android entry point). `:composeApp` has three source sets:
+Two Gradle modules: `:spacetradersiosdk` (KMP shared library) and `:app` (Android entry point).
 
-- **`commonMain`** — all shared logic: API layer, domain models, ViewModels, and Compose UI screens. This is where most code lives.
-- **`androidMain`** — Platform actuals (`Platform.android.kt`). Entry point (`MainActivity`, `SpaceTradersApplication`) lives in the `:androidApp` module.
-- **`iosMain`** — iOS entry point (`MainViewController`) and platform actuals.
+`:spacetradersiosdk` has three source sets:
+
+- **`commonMain`** — all shared logic: API layer, domain models, use cases, data repositories. No UI code.
+- **`androidMain`** — Platform actuals (`Platform.android.kt`) and Android Ktor engine (OkHttp).
+- **`iosMain`** — Platform actuals (`Platform.ios.kt`) and iOS Ktor engine (Darwin).
+
+`:app` is a standalone Android application using Jetpack Compose (not Compose Multiplatform). It owns all UI, ViewModels, navigation, and DI. It depends on `:spacetradersiosdk` for business logic.
 
 The `expect/actual` mechanism in `Platform.kt` is the current example of platform-specific behaviour.
 
-### Planned layer structure inside `commonMain`
+### Layer structure inside `spacetradersiosdk/src/commonMain`
 
 ```
-api/        ← Ktor HttpClient, endpoint functions, request/response DTOs
-domain/     ← Business models, use cases
-ui/         ← Compose screens and ViewModels (androidx.lifecycle)
+api/        <- Ktor HttpClient, endpoint functions, request/response DTOs
+api/mapper/ <- DTO-to-domain-model extension functions
+domain/     <- Business models, use cases, repository interfaces
+data/       <- Repository implementations
 ```
 
 ## Key Dependencies & Versions
@@ -74,19 +79,19 @@ ui/         ← Compose screens and ViewModels (androidx.lifecycle)
 | Dependency | Version |
 |---|---|
 | Kotlin | 2.3.20 |
-| Compose Multiplatform | 1.10.3 |
+| Compose BOM (Jetpack, app only) | 2026.03.01 |
 | AGP | 9.1.0 |
-| androidx.lifecycle (ViewModel/runtime) | 2.10.0 |
+| androidx.lifecycle (app only) | 2.10.0 |
 | Ktor | 3.4.2 |
 | kotlinx-serialization | 1.10.0 |
-| Koin | 4.2.0 |
+| Napier (logging) | 2.7.1 |
 | multiplatform-settings | 1.3.0 |
 
 Ktor uses the `okhttp` engine for Android and `darwin` for iOS — both are already wired in `gradle/libs.versions.toml`.
 
 ## Testing
 
-Tests live in `composeApp/src/commonTest/`. Test dependencies in `build.gradle.kts` commonTest block: `kotlin.test`, `ktor-client-mock`, `kotlinx-coroutines-test`.
+Tests live in `spacetradersiosdk/src/commonTest/`. Android-specific tests use `androidHostTest` (JVM unit) and `androidDeviceTest` (instrumented). Test dependencies in `build.gradle.kts` commonTest block: `kotlin.test`, `ktor-client-mock`.
 
 - **Pure unit tests** (mappers, enums): no extra setup needed beyond `kotlin.test`
 - **Use case tests**: back `AccountsApi`/`ContractsApi` with Ktor `MockEngine`; use hand-written fakes for repository interfaces (no mockk); use `runTest` for suspend functions
@@ -96,8 +101,9 @@ Tests live in `composeApp/src/commonTest/`. Test dependencies in `build.gradle.k
 
 - `gradlew` must have the executable bit set in git (`git update-index --chmod=+x gradlew`). Windows does not preserve Unix permissions — omitting this causes CI to fail with exit code 126.
 - The repo root IS the KMP project root. Git was initialized inside `KMP/`, so there is no `KMP/` subdirectory on CI runners or in the repo. Do not use `working-directory: KMP` in GitHub Actions workflows.
-- In Koin 4.x, the Compose Multiplatform artifact is `io.insert-koin:koin-compose`, not `koin-compose-multiplatform` (that artifact does not exist on Maven Central).
 - `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`.
+- Package namespace migration is in progress: most SDK files use `com.brokenhuskysledteam.spacetraders.*` (old), target is `com.brokenhuskysledteam.spacetradersio.sdk.*`. Both coexist until migration completes.
+- CI workflows (`.github/workflows/`) still reference the old `:composeApp` module and need updating before merging to develop.
 
 ## SpaceTraders API
 
@@ -111,13 +117,12 @@ Tests live in `composeApp/src/commonTest/`. Test dependencies in `build.gradle.k
 The `mobile-mcp` MCP server enables live interaction with the running Android emulator.
 
 - **Always use `mobile_list_elements_on_screen` for click targets** — never estimate coordinates from screenshots. Screenshots render at half native resolution (e.g. 720px wide) but element coordinates are in native pixel space (1080px). Guessing from screenshots will miss.
-- **Workflow:** `mobile_list_elements_on_screen` → get coordinates → `mobile_click_on_screen_at_coordinates` → `mobile_take_screenshot` to verify.
+- **Workflow:** `mobile_list_elements_on_screen` -> get coordinates -> `mobile_click_on_screen_at_coordinates` -> `mobile_take_screenshot` to verify.
 - **Always call `mobile_list_available_devices` first** — never assume a device ID; the connected device changes frequently.
 - **Windows gotcha:** The MCP server command must use a `cmd /c` wrapper — `command: "cmd", args: ["/c", "npx", "@mobilenext/mobile-mcp@latest"]` in `.claude.json`. Plain `npx` is a `.cmd` script and cannot be spawned directly on Windows.
 - MCP servers connect at session startup — config changes require a session restart to take effect.
 
 ## Gradle Config Notes
 
-- Configuration cache and build cache are both enabled (`gradle.properties`).
-- Daemon JVM heap: 3 GB; build JVM heap: 4 GB.
-- `TYPESAFE_PROJECT_ACCESSORS` feature preview is enabled in `settings.gradle.kts`.
+- Daemon JVM heap: 2 GB (`-Xmx2048m` in `gradle.properties`).
+- `kotlin.code.style=official` is set in `gradle.properties`.

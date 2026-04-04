@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.domain.usecase
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetraders.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetraders.api.mapper.toDomain
