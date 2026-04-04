@@ -72,7 +72,7 @@ class RegisterAgentUseCaseTest {
             install(ContentNegotiation) { json(json) }
             defaultRequest { contentType(ContentType.Application.Json) }
         }
-        return RegisterAgentUseCase(AccountsApi(client), tokenRepo)
+        return RegisterAgentUseCaseImpl(AccountsApi(client), tokenRepo)
     }
 
     @Test

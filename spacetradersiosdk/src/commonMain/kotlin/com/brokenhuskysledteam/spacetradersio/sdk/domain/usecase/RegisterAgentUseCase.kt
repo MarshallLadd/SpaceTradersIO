@@ -11,16 +11,23 @@ data class RegistrationResult(
     val token: String
 )
 
-// Registers a new agent with the SpaceTraders API, then immediately
-// persists the returned bearer token so subsequent authenticated
-// requests can be made without re-registering.
-class RegisterAgentUseCase(
-    private val accountsApi: AccountsApi,
-    private val tokenRepository: TokenRepository
-) {
+interface RegisterAgentUseCase {
     suspend operator fun invoke(
         symbol: String,
         faction: FactionSymbol = FactionSymbol.COSMIC
+    ): RegistrationResult
+}
+
+// Registers a new agent with the SpaceTraders API, then immediately
+// persists the returned bearer token so subsequent authenticated
+// requests can be made without re-registering.
+class RegisterAgentUseCaseImpl(
+    private val accountsApi: AccountsApi,
+    private val tokenRepository: TokenRepository
+) : RegisterAgentUseCase {
+    override suspend operator fun invoke(
+        symbol: String,
+        faction: FactionSymbol
     ): RegistrationResult {
         val response = accountsApi.register(
             symbol = symbol,

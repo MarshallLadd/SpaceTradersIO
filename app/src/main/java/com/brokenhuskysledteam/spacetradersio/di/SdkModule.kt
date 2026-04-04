@@ -3,6 +3,7 @@ package com.brokenhuskysledteam.spacetradersio.di
 import com.brokenhuskysledteam.spacetradersio.sdk.api.client.SpaceTradersClient
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
@@ -10,6 +11,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractU
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.FulfillContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.GetMyContractsUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCaseImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -38,7 +40,7 @@ object SdkModule {
     @Provides
     @Singleton
     fun provideAgentsApi(client: SpaceTradersClient): AgentsApi =
-        AgentsApi(client)
+        AgentsApiImpl(client)
 
     @Provides
     @Singleton
@@ -49,7 +51,7 @@ object SdkModule {
     fun provideRegisterAgentUseCase(
         accountsApi: AccountsApi,
         tokenRepository: TokenRepository
-    ): RegisterAgentUseCase = RegisterAgentUseCase(accountsApi, tokenRepository)
+    ): RegisterAgentUseCase = RegisterAgentUseCaseImpl(accountsApi, tokenRepository)
 
     @Provides
     fun provideAcceptContractUseCase(contractsApi: ContractsApi): AcceptContractUseCase =
