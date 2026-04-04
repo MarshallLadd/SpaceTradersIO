@@ -47,6 +47,10 @@ dependencies {
     // SDK module
     implementation(project(":spacetradersiosdk"))
 
+    // SDK transitive deps needed for DI wiring
+    implementation(libs.multiplatform.settings.no.arg)
+    implementation(libs.ktor.client.core)
+
     // Core Android
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
