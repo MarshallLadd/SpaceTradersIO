@@ -39,14 +39,14 @@ All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead
 # Build Android debug APK
 ./gradlew :app:assembleDebug
 
-# Run all SDK common tests
-./gradlew :spacetradersiosdk:testDebugUnitTest
+# Compile SDK (catches type errors before running tests)
+./gradlew :spacetradersiosdk:compileAndroidHostTestSources
+
+# Run all SDK tests (androidHostTest + commonTest compiled for JVM)
+./gradlew :spacetradersiosdk:allTests
 
 # Run a single test class
-./gradlew :spacetradersiosdk:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetraders.MyTest"
-
-# Sync and check the build without assembling
-./gradlew :spacetradersiosdk:compileDebugKotlinAndroid
+./gradlew :spacetradersiosdk:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetradersio.sdk.MyTest"
 ```
 
 iOS framework is built via `./gradlew :spacetradersiosdk:assembleSpacetradersiosdkKitReleaseXCFramework`. There is no iOS app in this repo yet — the SDK produces an xcframework (`spacetradersiosdkKit`) for consumption by a native Swift/Xcode project.
@@ -91,7 +91,9 @@ Ktor uses the `okhttp` engine for Android and `darwin` for iOS — both are alre
 
 ## Testing
 
-Tests live in `spacetradersiosdk/src/commonTest/`. Android-specific tests use `androidHostTest` (JVM unit) and `androidDeviceTest` (instrumented). Test dependencies in `build.gradle.kts` commonTest block: `kotlin.test`, `ktor-client-mock`.
+Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spacetradersiosdk/src/androidDeviceTest/` (instrumented). Test dependencies: `kotlin.test`, `ktor-client-mock`, `kotlinx-coroutines-test`.
+
+**Coverage goal:** 100% class, method, line, and branch coverage for all new code.
 
 - **Pure unit tests** (mappers, enums): no extra setup needed beyond `kotlin.test`
 - **Use case tests**: back `AccountsApi`/`ContractsApi` with Ktor `MockEngine`; use hand-written fakes for repository interfaces (no mockk); use `runTest` for suspend functions
@@ -102,8 +104,7 @@ Tests live in `spacetradersiosdk/src/commonTest/`. Android-specific tests use `a
 - `gradlew` must have the executable bit set in git (`git update-index --chmod=+x gradlew`). Windows does not preserve Unix permissions — omitting this causes CI to fail with exit code 126.
 - The repo root IS the KMP project root. Git was initialized inside `KMP/`, so there is no `KMP/` subdirectory on CI runners or in the repo. Do not use `working-directory: KMP` in GitHub Actions workflows.
 - `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`.
-- Package namespace migration is in progress: most SDK files use `com.brokenhuskysledteam.spacetraders.*` (old), target is `com.brokenhuskysledteam.spacetradersio.sdk.*`. Both coexist until migration completes.
-- CI workflows (`.github/workflows/`) still reference the old `:composeApp` module and need updating before merging to develop.
+- SDK package namespace is `com.brokenhuskysledteam.spacetradersio.sdk.*` — all source and test files use this consistently.
 
 ## SpaceTraders API
 
