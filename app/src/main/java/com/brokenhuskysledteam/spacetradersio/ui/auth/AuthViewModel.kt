@@ -3,6 +3,8 @@ package com.brokenhuskysledteam.spacetradersio.ui.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,6 +62,13 @@ class AuthViewModel @Inject constructor(
                 registerAgentUseCase(state.callsign.trim(), state.selectedFaction)
                 _uiState.update { it.copy(isRegistering = false) }
                 _navigationEvent.send(NavigationTarget.Dashboard)
+            } catch (e: SpaceTradersApiException) {
+                val errorMessage = when (e.error) {
+                    is SpaceTradersError.AuthError.RegisterAgentConflictSymbol -> "Callsign already taken"
+                    is SpaceTradersError.AuthError.RegisterAgentSymbolReserved -> "Callsign is reserved"
+                    else -> e.message ?: "Registration failed"
+                }
+                _uiState.update { it.copy(isRegistering = false, error = errorMessage) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isRegistering = false, error = e.message ?: "Registration failed") }
             }

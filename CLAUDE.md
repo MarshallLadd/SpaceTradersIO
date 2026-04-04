@@ -92,6 +92,10 @@ domain/     <- Business models, use cases, repository interfaces
 data/       <- Repository implementations
 ```
 
+### Error handling
+
+API errors are deserialized via `HttpCallValidator` in `SpaceTradersClient` and thrown as `SpaceTradersApiException(error: SpaceTradersError, httpStatus: Int)`. The sealed `SpaceTradersError` hierarchy maps all ~90 API error codes (source: `../OpenAPISpec/space_trader_api_error_codes.json`) into categories: `AuthError`, `NavigationError`, `ShipOperationError`, `ContractError`, `MarketError`, `ConstructionError`, `GeneralError`, plus standalone types and an `Unknown` fallback. App ViewModels catch `SpaceTradersApiException` and `when`-match on the sealed type.
+
 ## Key Dependencies & Versions
 
 | Dependency | Version |
@@ -126,6 +130,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - SDK package namespace is `com.brokenhuskysledteam.spacetradersio.sdk.*` — all source and test files use this consistently.
 - In non-KMP JVM modules (like `:app`), use `kotlin-test-junit` (not plain `kotlin-test`) to get `@BeforeTest`/`@AfterTest` annotations resolved. The plain artifact lacks the JVM-specific bridge.
 - Material 3 `Shapes` slots require `CornerBasedShape` — use `RoundedCornerShape(0.dp)` for sharp corners, not `RectangleShape` (which is a generic `Shape` and won't compile).
+- `assertIs<T>()` returns `T`, not `Unit`. Using it as an expression body (`fun test() = assertIs<Foo>(x)`) makes JUnit reject the test method as non-void. Use block bodies: `fun test() { assertIs<Foo>(x) }`.
 
 ## SpaceTraders API
 
