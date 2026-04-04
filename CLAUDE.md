@@ -45,6 +45,9 @@ All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead
 # Run all SDK tests (androidHostTest + commonTest compiled for JVM)
 ./gradlew :spacetradersiosdk:allTests
 
+# Run app unit tests (ViewModels, etc.)
+./gradlew :app:testDebugUnitTest
+
 # Run a single test class
 ./gradlew :spacetradersiosdk:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetradersio.sdk.MyTest"
 ```
@@ -64,6 +67,17 @@ Two Gradle modules: `:spacetradersiosdk` (KMP shared library) and `:app` (Androi
 `:app` is a standalone Android application using Jetpack Compose (not Compose Multiplatform). It owns all UI, ViewModels, navigation, and DI. It depends on `:spacetradersiosdk` for business logic.
 
 The `expect/actual` mechanism in `Platform.kt` is the current example of platform-specific behaviour.
+
+### App layer structure inside `app/src/main`
+
+```
+di/          <- Hilt module bridging SDK types into Android DI graph
+navigation/  <- Navigation Compose routes (@Serializable objects) and NavHost
+ui/auth/     <- Auth screen: register + token import (UDF: StateFlow + sealed events)
+ui/dashboard/ <- Dashboard screen: agent info, logout (UDF: StateFlow + sealed events)
+```
+
+ViewModels use `Channel<NavigationTarget>` (not SharedFlow) for one-shot navigation to avoid re-delivery on config change.
 
 ### Layer structure inside `spacetradersiosdk/src/commonMain`
 
@@ -98,6 +112,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - **Pure unit tests** (mappers, enums): no extra setup needed beyond `kotlin.test`
 - **Use case tests**: back `AccountsApi`/`ContractsApi` with Ktor `MockEngine`; use hand-written fakes for repository interfaces (no mockk); use `runTest` for suspend functions
 - **Test `HttpClient` must include `defaultRequest { contentType(ContentType.Application.Json) }`** — omitting it causes `Fail to prepare request body` because `setBody()` requires Content-Type, matching the production `SpaceTradersClient` setup
+- **App ViewModel tests** (`app/src/test/`): use `kotlin-test-junit` bridge for JVM runner compatibility. Hand-written fakes implement SDK interfaces directly (no MockEngine needed). Use `StandardTestDispatcher` + `advanceUntilIdle()` for coroutine control, Turbine for `Channel`/`Flow` assertions.
 
 ## Gotchas
 
@@ -105,6 +120,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - The repo root IS the KMP project root. Git was initialized inside `KMP/`, so there is no `KMP/` subdirectory on CI runners or in the repo. Do not use `working-directory: KMP` in GitHub Actions workflows.
 - `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`.
 - SDK package namespace is `com.brokenhuskysledteam.spacetradersio.sdk.*` — all source and test files use this consistently.
+- In non-KMP JVM modules (like `:app`), use `kotlin-test-junit` (not plain `kotlin-test`) to get `@BeforeTest`/`@AfterTest` annotations resolved. The plain artifact lacks the JVM-specific bridge.
 
 ## SpaceTraders API
 
