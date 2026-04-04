@@ -20,13 +20,20 @@ const val BASE_URL = "https://api.spacetraders.io/v2"
 //   - unauthenticated: for pre-login calls (e.g. /register, server status)
 //   - authenticated: built on demand using the token from TokenRepository
 //     so it always reflects the current stored token without needing a restart.
-class SpaceTradersClient(private val tokenRepository: TokenRepository) {
+class SpaceTradersClient(
+    private val tokenRepository: TokenRepository,
+    internal val httpClientFactory: ((token: String?) -> HttpClient)? = null
+) {
 
-    val unauthenticated: HttpClient = buildHttpClient(token = null)
+    val unauthenticated: HttpClient
+        get() = httpClientFactory?.invoke(null) ?: buildHttpClient(token = null)
 
     // Rebuilt on each access so it picks up a freshly saved token after registration.
     val authenticated: HttpClient
-        get() = buildHttpClient(token = tokenRepository.getToken())
+        get() {
+            val token = tokenRepository.getToken()
+            return httpClientFactory?.invoke(token) ?: buildHttpClient(token = token)
+        }
 }
 
 private fun buildHttpClient(token: String?): HttpClient = HttpClient {

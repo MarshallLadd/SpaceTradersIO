@@ -2,19 +2,13 @@ package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
+import com.brokenhuskysledteam.spacetradersio.sdk.testing.buildMockSpaceTradersClient
 import io.ktor.client.engine.mock.respond
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
 import io.ktor.http.headersOf
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -43,15 +37,11 @@ private const val CONTRACTS_RESPONSE = """
 class GetMyContractsUseCaseTest {
 
     private fun buildUseCase(): GetMyContractsUseCase {
-        val engine = MockEngine { respond(
+        val client = buildMockSpaceTradersClient { respond(
             content = CONTRACTS_RESPONSE,
             status = HttpStatusCode.OK,
             headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
         )}
-        val client = HttpClient(engine) {
-            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            defaultRequest { contentType(ContentType.Application.Json) }
-        }
         return GetMyContractsUseCase(ContractsApi(client))
     }
 

@@ -2,7 +2,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -18,15 +18,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-
-// Hand-written fake — avoids mockk which is not yet a dependency.
-private class FakeTokenRepository : TokenRepository {
-    var savedToken: String? = null
-    override fun getToken(): String? = savedToken
-    override fun saveToken(token: String) { savedToken = token }
-    override fun clearToken() { savedToken = null }
-    override fun hasToken(): Boolean = savedToken != null
-}
 
 private const val REGISTER_RESPONSE = """
 {
@@ -86,29 +77,29 @@ class RegisterAgentUseCaseTest {
 
     @Test
     fun invoke_savesTokenToRepository() = runTest {
-        val tokenRepo = FakeTokenRepository()
+        val tokenRepo = FakeTokenRepository(storedToken = null)
         buildUseCase(tokenRepo).invoke("TEST_AGENT", FactionSymbol.COSMIC)
 
-        assertEquals("test-bearer-token", tokenRepo.savedToken)
+        assertEquals("test-bearer-token", tokenRepo.storedToken)
     }
 
     @Test
     fun invoke_returnsAgentWithCorrectSymbol() = runTest {
-        val result = buildUseCase(FakeTokenRepository()).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC)
 
         assertEquals("TEST_AGENT", result.agent.symbol)
     }
 
     @Test
     fun invoke_returnsTokenInResult() = runTest {
-        val result = buildUseCase(FakeTokenRepository()).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC)
 
         assertEquals("test-bearer-token", result.token)
     }
 
     @Test
     fun invoke_agentAccountIdMappedFromResponse() = runTest {
-        val result = buildUseCase(FakeTokenRepository()).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC)
 
         assertEquals("acc-abc123", result.agent.accountId)
     }
