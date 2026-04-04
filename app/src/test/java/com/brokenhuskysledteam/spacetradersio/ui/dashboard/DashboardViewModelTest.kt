@@ -20,6 +20,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+// In-memory token store. Starts with a token to simulate a logged-in state.
 private class FakeTokenRepository(var savedToken: String? = "existing-token") : TokenRepository {
     override fun getToken(): String? = savedToken
     override fun saveToken(token: String) { savedToken = token }
@@ -27,6 +28,8 @@ private class FakeTokenRepository(var savedToken: String? = "existing-token") : 
     override fun hasToken(): Boolean = savedToken != null
 }
 
+// Configurable fake — set agentResult for success or exception for failure.
+// Implements the interface directly; no real HTTP calls.
 private class FakeAgentsApi : AgentsApi {
     var agentResult: AgentDto? = null
     var exception: Exception? = null
@@ -42,6 +45,10 @@ private class FakeAgentsApi : AgentsApi {
     }
 }
 
+// Tests for DashboardViewModel covering init loading, success/error states,
+// retry, logout with token clearing, and error dismissal.
+// The ViewModel calls loadAgent() in init, so tests must configure the fake
+// API *before* calling createViewModel().
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelTest {
 

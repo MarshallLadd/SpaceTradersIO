@@ -21,6 +21,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+// In-memory token store. Starts empty (logged-out) since auth tests need to
+// verify that registration and import write the token correctly.
 private class FakeTokenRepository : TokenRepository {
     var savedToken: String? = null
     override fun getToken(): String? = savedToken
@@ -29,6 +31,8 @@ private class FakeTokenRepository : TokenRepository {
     override fun hasToken(): Boolean = savedToken != null
 }
 
+// Configurable fake — set result for success or exception for failure.
+// Implements the interface directly; no real API or token persistence.
 private class FakeRegisterAgentUseCase : RegisterAgentUseCase {
     var result: RegistrationResult? = null
     var exception: Exception? = null
@@ -39,6 +43,9 @@ private class FakeRegisterAgentUseCase : RegisterAgentUseCase {
     }
 }
 
+// Tests for AuthViewModel covering all UDF events, error paths, navigation
+// signals, and state transitions for both registration and token import flows.
+// Uses StandardTestDispatcher so coroutine execution is explicit via advanceUntilIdle().
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthViewModelTest {
 

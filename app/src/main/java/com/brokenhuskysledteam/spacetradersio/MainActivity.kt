@@ -14,9 +14,13 @@ import com.brokenhuskysledteam.spacetradersio.ui.theme.SpaceTradersIOTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+// Single-activity host for the entire app. Hilt injects the TokenRepository
+// so the NavHost can check auth state before any ViewModel is created.
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    // Field-injected because ComponentActivity doesn't support constructor injection.
+    // Used only to determine the initial navigation destination (auth vs dashboard).
     @Inject
     lateinit var tokenRepository: TokenRepository
 

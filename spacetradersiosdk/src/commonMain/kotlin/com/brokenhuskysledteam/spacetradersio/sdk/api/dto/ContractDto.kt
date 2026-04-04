@@ -2,6 +2,8 @@ package com.brokenhuskysledteam.spacetradersio.sdk.api.dto
 
 import kotlinx.serialization.Serializable
 
+// Raw DTO matching the SpaceTraders API "Contract" schema.
+// Dates arrive as ISO-8601 strings — parsed to Instant in the mapper layer.
 @Serializable
 data class ContractDto(
     val id: String,

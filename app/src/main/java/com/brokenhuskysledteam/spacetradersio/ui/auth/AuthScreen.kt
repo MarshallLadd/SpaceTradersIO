@@ -34,6 +34,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
 
+// Stateful wrapper that wires the Hilt-provided ViewModel to the stateless content.
+// The LaunchedEffect collects one-shot navigation events from the ViewModel's Channel.
 @Composable
 fun AuthScreen(
     onNavigateToDashboard: () -> Unit,
@@ -56,6 +58,8 @@ fun AuthScreen(
     )
 }
 
+// Stateless content composable — receives state and emits events.
+// Separated from AuthScreen so it can be previewed and tested independently.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreenContent(
@@ -104,6 +108,7 @@ fun AuthScreenContent(
     }
 }
 
+// Registration form: callsign text field + faction dropdown + register button.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
@@ -164,6 +169,9 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
     }
 }
 
+// Token import form: paste a bearer token from another client and connect.
+// Validation happens server-side — an invalid token will fail on the dashboard's
+// first API call, which clears the token and redirects back to auth.
 @Composable
 private fun ImportTokenTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
     OutlinedTextField(

@@ -18,6 +18,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+// Hilt module that bridges the KMP SDK into the Android DI graph.
+// All SDK types (repositories, API clients, use cases) are provided here so
+// ViewModels can receive them via constructor injection.
+//
+// Singleton-scoped bindings share one instance across the app's lifetime.
+// Use-case bindings are unscoped — each injection site gets a fresh instance,
+// which is fine since they're stateless.
 @Module
 @InstallIn(SingletonComponent::class)
 object SdkModule {

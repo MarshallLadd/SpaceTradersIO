@@ -3,6 +3,9 @@ package com.brokenhuskysledteam.spacetradersio.sdk.domain.model
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
 import kotlin.time.Instant
 
+// Domain model for a SpaceTraders contract.
+// Contracts are missions issued by factions — accept, deliver goods, fulfill for credits.
+// Dates are parsed from ISO-8601 strings into [Instant] at the mapper layer.
 data class Contract(
     val id: String,
     val factionSymbol: String,

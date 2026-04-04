@@ -9,7 +9,10 @@ import io.ktor.client.request.get
 // Endpoints under the "Agents" tag in the OpenAPI spec.
 // Requires an authenticated client (AgentToken).
 interface AgentsApi {
+    /** GET /my/agent — fetches the authenticated agent's details. */
     suspend fun getMyAgent(): AgentDto
+
+    /** GET /agents/{agentSymbol} — fetches a public agent by symbol. */
     suspend fun getAgent(symbol: String): AgentDto
 }
 

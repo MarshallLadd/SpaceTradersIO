@@ -11,7 +11,14 @@ data class RegistrationResult(
     val token: String
 )
 
+// Registers a new agent and persists the returned token.
+// Implemented by [RegisterAgentUseCaseImpl]; defined as an interface
+// so app-layer tests can substitute a fake without mock engines.
 interface RegisterAgentUseCase {
+    /**
+     * Sends a registration request with the given [symbol] and [faction],
+     * saves the returned bearer token, and returns the agent + token pair.
+     */
     suspend operator fun invoke(
         symbol: String,
         faction: FactionSymbol = FactionSymbol.COSMIC

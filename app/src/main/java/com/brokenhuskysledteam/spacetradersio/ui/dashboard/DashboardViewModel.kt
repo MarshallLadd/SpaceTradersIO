@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// Loads the authenticated agent's info on init and displays it.
+//
+// Handles auth failures (401/403) by clearing the stored token and navigating
+// back to auth — this is the validation path for imported tokens that turn out
+// to be invalid or expired. Other errors are shown inline with a retry option.
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val agentsApi: AgentsApi,

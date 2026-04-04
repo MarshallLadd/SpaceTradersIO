@@ -22,6 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 
+// Stateful wrapper — wires the Hilt ViewModel and collects navigation events.
 @Composable
 fun DashboardScreen(
     onNavigateToAuth: () -> Unit,
@@ -44,6 +45,7 @@ fun DashboardScreen(
     )
 }
 
+// Stateless content — three visual states: loading spinner, error with retry, agent info.
 @Composable
 fun DashboardScreenContent(
     uiState: DashboardUiState,

@@ -9,6 +9,10 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenReposit
 import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
 
+// Top-level navigation graph for the app. Checks TokenRepository at composition
+// time to decide whether to start on the auth screen or the dashboard.
+// Each transition clears the back stack (popUpTo inclusive) so the user can't
+// navigate back to a screen that's no longer valid (e.g. auth after login).
 @Composable
 fun SpaceTradersNavHost(
     tokenRepository: TokenRepository,

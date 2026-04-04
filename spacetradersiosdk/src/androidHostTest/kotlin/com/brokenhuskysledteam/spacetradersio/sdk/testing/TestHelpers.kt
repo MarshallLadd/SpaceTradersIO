@@ -14,6 +14,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
+// In-memory TokenRepository for SDK tests. Defaults to a non-null token
+// so authenticated API calls work out of the box; pass storedToken = null
+// to simulate a logged-out state.
 class FakeTokenRepository(var storedToken: String? = "test-token") : TokenRepository {
     override fun getToken(): String? = storedToken
     override fun saveToken(token: String) { storedToken = token }
@@ -21,6 +24,10 @@ class FakeTokenRepository(var storedToken: String? = "test-token") : TokenReposi
     override fun hasToken(): Boolean = storedToken != null
 }
 
+// Creates a SpaceTradersClient backed by Ktor's MockEngine.
+// The httpClientFactory overrides the default platform engine so no real
+// HTTP calls are made. The handler receives every request and must return
+// a mock response (typically via respond() or respondError()).
 fun buildMockSpaceTradersClient(
     tokenRepository: TokenRepository = FakeTokenRepository(),
     handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
