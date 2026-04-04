@@ -92,7 +92,7 @@ fun DashboardScreenContent(
                         Spacer(modifier = Modifier.height(12.dp))
                         TerminalButton(
                             text = "Retry",
-                            onClick = { onEvent(DashboardEvent.RetryClicked) },
+                            onClick = { onEvent(DashboardEvent.LogoutClicked) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

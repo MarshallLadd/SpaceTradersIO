@@ -10,6 +10,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.seconds
 
 // Loads the authenticated agent's info on init and displays it.
 //
@@ -25,8 +27,7 @@ import javax.inject.Inject
 // to be invalid or expired. Other errors are shown inline with a retry option.
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val agentsApi: AgentsApi,
-    private val tokenRepository: TokenRepository
+    private val agentsApi: AgentsApi, private val tokenRepository: TokenRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -56,13 +57,18 @@ class DashboardViewModel @Inject constructor(
             } catch (e: SpaceTradersApiException) {
                 when (e.error) {
                     is SpaceTradersError.AuthError -> {
+                        _uiState.update { it.copy(isLoading = false, error = e.message) }
                         tokenRepository.clearToken()
-                        _navigationEvent.send(NavigationTarget.Auth)
                     }
+
                     else -> _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load agent") }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false, error = e.message ?: "Failed to load agent"
+                    )
+                }
             }
         }
     }
