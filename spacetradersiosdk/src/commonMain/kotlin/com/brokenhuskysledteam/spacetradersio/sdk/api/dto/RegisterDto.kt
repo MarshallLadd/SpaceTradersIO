@@ -2,6 +2,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.api.dto
 
 import kotlinx.serialization.Serializable
 
+// Request body for POST /register — the only unauthenticated endpoint.
 @Serializable
 data class RegisterRequestDto(
     val symbol: String,
