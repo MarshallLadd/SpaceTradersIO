@@ -1,7 +1,0 @@
-TEAM_ID=
-
-PRODUCT_NAME=SpaceTraders
-PRODUCT_BUNDLE_IDENTIFIER=com.brokenhuskysledteam.spacetraders.SpaceTraders$(TEAM_ID)
-
-CURRENT_PROJECT_VERSION=1
-MARKETING_VERSION=1.0
