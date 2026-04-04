@@ -5,10 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import io.ktor.client.plugins.ClientRequestException
-import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,14 +53,13 @@ class DashboardViewModel @Inject constructor(
             try {
                 val agent = agentsApi.getMyAgent().toDomain()
                 _uiState.update { it.copy(agent = agent, isLoading = false) }
-            } catch (e: ClientRequestException) {
-                if (e.response.status == HttpStatusCode.Unauthorized ||
-                    e.response.status == HttpStatusCode.Forbidden
-                ) {
-                    tokenRepository.clearToken()
-                    _navigationEvent.send(NavigationTarget.Auth)
-                } else {
-                    _uiState.update { it.copy(isLoading = false, error = e.message) }
+            } catch (e: SpaceTradersApiException) {
+                when (e.error) {
+                    is SpaceTradersError.AuthError -> {
+                        tokenRepository.clearToken()
+                        _navigationEvent.send(NavigationTarget.Auth)
+                    }
+                    else -> _uiState.update { it.copy(isLoading = false, error = e.message) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message ?: "Failed to load agent") }

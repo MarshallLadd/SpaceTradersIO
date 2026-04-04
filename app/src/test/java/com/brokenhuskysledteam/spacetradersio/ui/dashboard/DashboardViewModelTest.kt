@@ -4,6 +4,8 @@ import app.cash.turbine.test
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -151,5 +153,36 @@ class DashboardViewModelTest {
 
         viewModel.onEvent(DashboardEvent.ErrorDismissed)
         assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun init_authError_clearsTokenAndNavigatesToAuth() = runTest {
+        agentsApi.exception = SpaceTradersApiException(
+            error = SpaceTradersError.AuthError.InvalidToken(code = 4115, message = "Invalid token."),
+            httpStatus = 401
+        )
+
+        val viewModel = createViewModel()
+        viewModel.navigationEvent.test {
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(NavigationTarget.Auth, awaitItem())
+        }
+        assertNull(tokenRepository.savedToken)
+    }
+
+    @Test
+    fun init_nonAuthApiError_setsErrorMessage() = runTest {
+        agentsApi.exception = SpaceTradersApiException(
+            error = SpaceTradersError.GeneralError.SystemStatusMaintenance(code = 3100, message = "Server is under maintenance."),
+            httpStatus = 503
+        )
+
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertEquals("Server is under maintenance.", state.error)
+        assertNull(state.agent)
     }
 }

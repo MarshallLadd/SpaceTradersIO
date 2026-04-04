@@ -3,6 +3,8 @@ package com.brokenhuskysledteam.spacetradersio.ui.auth
 import app.cash.turbine.test
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Agent
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
@@ -185,5 +187,47 @@ class AuthViewModelTest {
         viewModel.onEvent(AuthEvent.RegisterClicked) // blank callsign → error
         viewModel.onEvent(AuthEvent.ErrorDismissed)
         assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun registerClicked_conflictSymbol_showsUserFriendlyMessage() = runTest {
+        registerUseCase.exception = SpaceTradersApiException(
+            error = SpaceTradersError.AuthError.RegisterAgentConflictSymbol(code = 4111, message = "Agent symbol has already been claimed."),
+            httpStatus = 409
+        )
+        viewModel.onEvent(AuthEvent.CallsignChanged("TAKEN"))
+        viewModel.onEvent(AuthEvent.RegisterClicked)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Callsign already taken", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isRegistering)
+    }
+
+    @Test
+    fun registerClicked_reservedSymbol_showsUserFriendlyMessage() = runTest {
+        registerUseCase.exception = SpaceTradersApiException(
+            error = SpaceTradersError.AuthError.RegisterAgentSymbolReserved(code = 4110, message = "Agent symbol is reserved."),
+            httpStatus = 409
+        )
+        viewModel.onEvent(AuthEvent.CallsignChanged("RESERVED"))
+        viewModel.onEvent(AuthEvent.RegisterClicked)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Callsign is reserved", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isRegistering)
+    }
+
+    @Test
+    fun registerClicked_otherApiError_showsServerMessage() = runTest {
+        registerUseCase.exception = SpaceTradersApiException(
+            error = SpaceTradersError.GeneralError.SystemStatusMaintenance(code = 3100, message = "Server is under maintenance."),
+            httpStatus = 503
+        )
+        viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        viewModel.onEvent(AuthEvent.RegisterClicked)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Server is under maintenance.", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isRegistering)
     }
 }
