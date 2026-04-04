@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.domain.model.enums
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums
 
 enum class ShipNavStatus {
     IN_TRANSIT,  // Ship is currently traveling between waypoints

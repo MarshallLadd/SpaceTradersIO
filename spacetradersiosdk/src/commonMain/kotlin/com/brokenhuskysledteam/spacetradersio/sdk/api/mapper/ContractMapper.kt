@@ -1,9 +1,9 @@
-package com.brokenhuskysledteam.spacetraders.api.mapper
+package com.brokenhuskysledteam.spacetradersio.sdk.api.mapper
 
-import com.brokenhuskysledteam.spacetraders.api.dto.ContractDto
-import com.brokenhuskysledteam.spacetraders.domain.model.Contract
-import com.brokenhuskysledteam.spacetraders.domain.model.ContractTerms
-import com.brokenhuskysledteam.spacetraders.domain.model.enums.ContractType
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDto
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Contract
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractTerms
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
 import kotlin.time.Instant
 
 fun ContractDto.toDomain(): Contract = Contract(

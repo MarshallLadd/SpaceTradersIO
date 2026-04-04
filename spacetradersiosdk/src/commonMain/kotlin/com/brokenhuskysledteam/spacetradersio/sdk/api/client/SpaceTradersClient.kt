@@ -1,6 +1,6 @@
-package com.brokenhuskysledteam.spacetraders.api.client
+package com.brokenhuskysledteam.spacetradersio.sdk.api.client
 
-import com.brokenhuskysledteam.spacetraders.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import io.github.aakira.napier.Napier
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation

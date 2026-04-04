@@ -1,8 +1,8 @@
-package com.brokenhuskysledteam.spacetraders.api.mapper
+package com.brokenhuskysledteam.spacetradersio.sdk.api.mapper
 
-import com.brokenhuskysledteam.spacetraders.api.dto.ShipDto
-import com.brokenhuskysledteam.spacetraders.domain.model.Ship
-import com.brokenhuskysledteam.spacetraders.domain.model.enums.ShipNavStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipDto
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 
 fun ShipDto.toDomain(): Ship = Ship(
     symbol = symbol,

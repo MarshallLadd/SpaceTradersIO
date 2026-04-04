@@ -1,7 +1,7 @@
-package com.brokenhuskysledteam.spacetraders.api.endpoints
+package com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints
 
-import com.brokenhuskysledteam.spacetraders.api.dto.AgentDto
-import com.brokenhuskysledteam.spacetraders.api.dto.ApiResponse
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ApiResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get

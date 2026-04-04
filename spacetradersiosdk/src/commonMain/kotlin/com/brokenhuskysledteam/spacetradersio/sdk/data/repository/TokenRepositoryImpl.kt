@@ -1,6 +1,6 @@
-package com.brokenhuskysledteam.spacetraders.data.repository
+package com.brokenhuskysledteam.spacetradersio.sdk.data.repository
 
-import com.brokenhuskysledteam.spacetraders.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.russhwolf.settings.Settings
 
 // Persists the bearer token using multiplatform-settings.

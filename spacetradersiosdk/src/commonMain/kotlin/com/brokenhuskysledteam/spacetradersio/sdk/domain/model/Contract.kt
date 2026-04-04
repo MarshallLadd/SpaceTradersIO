@@ -1,6 +1,6 @@
-package com.brokenhuskysledteam.spacetraders.domain.model
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.model
 
-import com.brokenhuskysledteam.spacetraders.domain.model.enums.ContractType
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
 import kotlin.time.Instant
 
 data class Contract(

@@ -1,7 +1,7 @@
-package com.brokenhuskysledteam.spacetraders.api.mapper
+package com.brokenhuskysledteam.spacetradersio.sdk.api.mapper
 
-import com.brokenhuskysledteam.spacetraders.api.dto.AgentDto
-import com.brokenhuskysledteam.spacetraders.domain.model.Agent
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Agent
 
 fun AgentDto.toDomain(): Agent = Agent(
     accountId = accountId,

@@ -1,6 +1,6 @@
-package com.brokenhuskysledteam.spacetraders.domain.model
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.model
 
-import com.brokenhuskysledteam.spacetraders.domain.model.enums.ShipNavStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 
 // Simplified ship model scoped to dashboard display needs.
 // Full ship details (modules, mounts, reactor, engine) will be added

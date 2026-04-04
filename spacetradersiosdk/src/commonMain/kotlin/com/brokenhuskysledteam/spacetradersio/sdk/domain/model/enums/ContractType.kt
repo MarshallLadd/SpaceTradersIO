@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.domain.model.enums
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums
 
 enum class ContractType {
     PROCUREMENT,  // Deliver specific goods to a waypoint

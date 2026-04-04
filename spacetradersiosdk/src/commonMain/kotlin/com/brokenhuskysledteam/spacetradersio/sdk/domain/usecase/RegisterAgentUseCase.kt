@@ -1,10 +1,10 @@
-package com.brokenhuskysledteam.spacetraders.domain.usecase
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
-import com.brokenhuskysledteam.spacetraders.api.endpoints.AccountsApi
-import com.brokenhuskysledteam.spacetraders.api.mapper.toDomain
-import com.brokenhuskysledteam.spacetraders.domain.model.Agent
-import com.brokenhuskysledteam.spacetraders.domain.model.enums.FactionSymbol
-import com.brokenhuskysledteam.spacetraders.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Agent
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 
 data class RegistrationResult(
     val agent: Agent,

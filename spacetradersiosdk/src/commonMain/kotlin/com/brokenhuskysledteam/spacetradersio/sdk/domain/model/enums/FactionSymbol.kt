@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.domain.model.enums
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums
 
 // All playable factions in the SpaceTraders universe.
 // COSMIC is recommended for new agents — well connected to the rest of the universe.

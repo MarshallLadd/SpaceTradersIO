@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.domain.repository
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.repository
 
 // Abstracts persistent storage of the SpaceTraders bearer token.
 // The interface lives in the domain layer so use cases and ViewModels

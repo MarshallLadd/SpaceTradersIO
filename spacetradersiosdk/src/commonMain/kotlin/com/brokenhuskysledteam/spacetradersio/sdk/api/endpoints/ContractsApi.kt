@@ -1,11 +1,11 @@
-package com.brokenhuskysledteam.spacetraders.api.endpoints
+package com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints
 
-import com.brokenhuskysledteam.spacetraders.api.dto.ApiResponse
-import com.brokenhuskysledteam.spacetraders.api.dto.ContractActionResponseDto
-import com.brokenhuskysledteam.spacetraders.api.dto.ContractDto
-import com.brokenhuskysledteam.spacetraders.api.dto.DeliverCargoRequestDto
-import com.brokenhuskysledteam.spacetraders.api.dto.DeliverCargoResponseDto
-import com.brokenhuskysledteam.spacetraders.api.dto.PaginatedResponse
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ApiResponse
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractActionResponseDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.DeliverCargoRequestDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.DeliverCargoResponseDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get

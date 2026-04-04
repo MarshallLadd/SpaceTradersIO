@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.api.dto
+package com.brokenhuskysledteam.spacetradersio.sdk.api.dto
 
 import kotlinx.serialization.Serializable
 

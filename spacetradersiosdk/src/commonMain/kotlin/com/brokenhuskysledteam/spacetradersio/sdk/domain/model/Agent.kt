@@ -1,4 +1,4 @@
-package com.brokenhuskysledteam.spacetraders.domain.model
+package com.brokenhuskysledteam.spacetradersio.sdk.domain.model
 
 // Represents the authenticated player's agent.
 // accountId is null when viewing another agent via the public /agents endpoint.
