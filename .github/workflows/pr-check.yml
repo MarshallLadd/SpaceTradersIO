@@ -38,9 +38,9 @@ jobs:
       # Compile the Android debug target across all source sets (commonMain + androidMain).
       # Catches type errors and misconfigured dependencies before running tests.
       - name: Compile
-        run: ./gradlew :spacetradersiosdk:compileDebugKotlinAndroid
+        run: ./gradlew :spacetradersiosdk:compileAndroidHostTestSources
 
       # Run all unit tests in the debug variant.
       # Tests live in commonTest and are compiled to run on the JVM here.
       - name: Unit tests
-        run: ./gradlew :spacetradersiosdk:testDebugUnitTest
+        run: ./gradlew :spacetradersiosdk:allTests
