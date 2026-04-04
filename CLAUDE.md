@@ -75,9 +75,13 @@ di/          <- Hilt module bridging SDK types into Android DI graph
 navigation/  <- Navigation Compose routes (@Serializable objects) and NavHost
 ui/auth/     <- Auth screen: register + token import (UDF: StateFlow + sealed events)
 ui/dashboard/ <- Dashboard screen: agent info, logout (UDF: StateFlow + sealed events)
+ui/components/ <- Reusable themed composables: TerminalCard, TerminalButton, TerminalTextField, ScanlineOverlay
+ui/theme/    <- Retro terminal theme (dark-only, green-on-black, monospace, sharp corners)
 ```
 
 ViewModels use `Channel<NavigationTarget>` (not SharedFlow) for one-shot navigation to avoid re-delivery on config change.
+
+The app uses a dark-only retro terminal aesthetic. Design inspiration images live at `../InsipirationImages/` (note: folder name has a typo). New UI should follow this visual language: green-on-black, bordered panels, monospace text, uppercase headers.
 
 ### Layer structure inside `spacetradersiosdk/src/commonMain`
 
@@ -121,6 +125,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`.
 - SDK package namespace is `com.brokenhuskysledteam.spacetradersio.sdk.*` — all source and test files use this consistently.
 - In non-KMP JVM modules (like `:app`), use `kotlin-test-junit` (not plain `kotlin-test`) to get `@BeforeTest`/`@AfterTest` annotations resolved. The plain artifact lacks the JVM-specific bridge.
+- Material 3 `Shapes` slots require `CornerBasedShape` — use `RoundedCornerShape(0.dp)` for sharp corners, not `RectangleShape` (which is a generic `Shape` and won't compile).
 
 ## SpaceTraders API
 
