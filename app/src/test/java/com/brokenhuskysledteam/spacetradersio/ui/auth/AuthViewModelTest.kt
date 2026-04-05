@@ -20,7 +20,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -178,8 +177,11 @@ class AuthViewModelTest {
         assertEquals("my-account-token", registerUseCase.lastAccountToken)
     }
 
+    // Token persistence is the use case's responsibility, not the ViewModel's.
+    // FakeRegisterAgentUseCase never calls tokenRepository.saveToken(), so after a
+    // successful registration the repository must remain untouched — savedToken stays null.
     @Test
-    fun registerClicked_doesNotSaveAccountTokenToRepository() = runTest {
+    fun registerClicked_doesNotSaveAnyTokenToRepository() = runTest {
         registerUseCase.result = RegistrationResult(
             agent = Agent("acc-1", "CMD", "HQ", 100000L, "COSMIC", 1),
             token = "agent-tok"
@@ -193,7 +195,7 @@ class AuthViewModelTest {
             awaitItem()
         }
 
-        assertNotEquals("my-account-token", tokenRepository.savedToken)
+        assertNull(tokenRepository.savedToken)
     }
 
     @Test
