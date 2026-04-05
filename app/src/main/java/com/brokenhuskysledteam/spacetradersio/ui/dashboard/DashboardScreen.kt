@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +31,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalCard
 @Composable
 fun DashboardScreen(
     onNavigateToAuth: () -> Unit,
+    onNavigateToShipList: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -38,6 +40,7 @@ fun DashboardScreen(
         viewModel.navigationEvent.collect { target ->
             when (target) {
                 NavigationTarget.Auth -> onNavigateToAuth()
+                NavigationTarget.ShipList -> onNavigateToShipList()
                 else -> {}
             }
         }
@@ -138,7 +141,10 @@ fun DashboardScreenContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    TerminalCard(title = "Fleet") {
+                    TerminalCard(
+                        title = "Fleet",
+                        modifier = Modifier.clickable { onEvent(DashboardEvent.FleetCardClicked) }
+                    ) {
                         TerminalDataRow("SHIPS", uiState.agent.shipCount.toString())
                     }
 

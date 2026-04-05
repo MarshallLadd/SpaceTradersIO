@@ -5,11 +5,21 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ContractsApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.FulfillContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.GetMyContractsUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCaseImpl
 import dagger.Module
@@ -71,4 +81,26 @@ object SdkModule {
     @Provides
     fun provideFulfillContractUseCase(contractsApi: ContractsApi): FulfillContractUseCase =
         FulfillContractUseCase(contractsApi)
+
+    @Provides
+    @Singleton
+    fun provideFleetApi(client: SpaceTradersClient): FleetApi =
+        FleetApiImpl(client)
+
+    @Provides
+    @Singleton
+    fun provideFleetRepository(fleetApi: FleetApi): FleetRepository =
+        FleetRepositoryImpl(fleetApi)
+
+    @Provides
+    fun provideOrbitShipUseCase(fleetApi: FleetApi): OrbitShipUseCase =
+        OrbitShipUseCaseImpl(fleetApi)
+
+    @Provides
+    fun provideDockShipUseCase(fleetApi: FleetApi): DockShipUseCase =
+        DockShipUseCaseImpl(fleetApi)
+
+    @Provides
+    fun provideRefuelShipUseCase(fleetApi: FleetApi): RefuelShipUseCase =
+        RefuelShipUseCaseImpl(fleetApi)
 }

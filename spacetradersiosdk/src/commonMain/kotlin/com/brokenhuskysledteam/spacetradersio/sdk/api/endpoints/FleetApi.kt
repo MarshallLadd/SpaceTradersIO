@@ -11,6 +11,7 @@ import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 
 // Endpoints under the "Fleet" tag in the OpenAPI spec.
 // All endpoints require an authenticated client (AgentToken).
@@ -38,18 +39,18 @@ class FleetApiImpl(private val client: SpaceTradersClient) : FleetApi {
     // POST /my/ships/{shipSymbol}/orbit — moves the ship into orbit.
     // Returns the updated nav state. Idempotent if already in orbit.
     override suspend fun orbitShip(shipSymbol: String): ShipNavDto =
-        client.authenticated.post("my/ships/$shipSymbol/orbit")
+        client.authenticated.post("my/ships/$shipSymbol/orbit") { setBody("{}") }
             .body<ApiResponse<OrbitDockResponseDto>>().data.nav
 
     // POST /my/ships/{shipSymbol}/dock — docks the ship at its current waypoint.
     // Returns the updated nav state. Idempotent if already docked.
     override suspend fun dockShip(shipSymbol: String): ShipNavDto =
-        client.authenticated.post("my/ships/$shipSymbol/dock")
+        client.authenticated.post("my/ships/$shipSymbol/dock") { setBody("{}") }
             .body<ApiResponse<OrbitDockResponseDto>>().data.nav
 
     // POST /my/ships/{shipSymbol}/refuel — refuels the ship to max capacity
     // from the local market. Ship must be docked at a waypoint with Marketplace.
     override suspend fun refuelShip(shipSymbol: String): RefuelResponseDto =
-        client.authenticated.post("my/ships/$shipSymbol/refuel")
+        client.authenticated.post("my/ships/$shipSymbol/refuel") { setBody("{}") }
             .body<ApiResponse<RefuelResponseDto>>().data
 }

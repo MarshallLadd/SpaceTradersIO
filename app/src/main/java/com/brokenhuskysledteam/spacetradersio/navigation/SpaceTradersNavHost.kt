@@ -8,6 +8,8 @@ import androidx.navigation.compose.rememberNavController
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
+import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
+import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
 
 // Top-level navigation graph for the app. Checks TokenRepository at composition
 // time to decide whether to start on the auth screen or the dashboard.
@@ -42,8 +44,23 @@ fun SpaceTradersNavHost(
                     navController.navigate(AuthRoute) {
                         popUpTo<DashboardRoute> { inclusive = true }
                     }
+                },
+                onNavigateToShipList = {
+                    navController.navigate(ShipListRoute)
                 }
             )
+        }
+
+        composable<ShipListRoute> {
+            ShipListScreen(
+                onNavigateToShipDetail = { shipSymbol ->
+                    navController.navigate(ShipDetailRoute(shipSymbol))
+                }
+            )
+        }
+
+        composable<ShipDetailRoute> {
+            ShipDetailScreen()
         }
     }
 }
