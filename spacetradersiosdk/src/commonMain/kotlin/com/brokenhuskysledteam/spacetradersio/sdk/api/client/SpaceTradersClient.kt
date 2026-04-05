@@ -41,6 +41,12 @@ class SpaceTradersClient(
             val token = tokenRepository.getToken()
             return httpClientFactory?.invoke(token) ?: buildHttpClient(token = token)
         }
+
+    // Builds a one-off client authenticated with the given token.
+    // Used for endpoints that require a token not stored in TokenRepository
+    // (e.g. AccountToken for /register).
+    fun authenticatedWith(token: String): HttpClient =
+        httpClientFactory?.invoke(token) ?: buildHttpClient(token = token)
 }
 
 internal val spaceTradersJson = Json {

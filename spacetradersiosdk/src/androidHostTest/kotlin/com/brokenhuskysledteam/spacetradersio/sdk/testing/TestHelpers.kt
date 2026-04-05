@@ -34,10 +34,13 @@ fun buildMockSpaceTradersClient(
 ): SpaceTradersClient {
     return SpaceTradersClient(
         tokenRepository = tokenRepository,
-        httpClientFactory = { _ ->
+        httpClientFactory = { token ->
             HttpClient(MockEngine(handler)) {
                 install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-                defaultRequest { contentType(ContentType.Application.Json) }
+                defaultRequest {
+                    contentType(ContentType.Application.Json)
+                    if (token != null) headers.append("Authorization", "Bearer $token")
+                }
             }
         }
     )
