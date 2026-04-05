@@ -20,6 +20,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -34,12 +35,18 @@ private class FakeTokenRepository : TokenRepository {
 }
 
 // Configurable fake — set result for success or exception for failure.
-// Implements the interface directly; no real API or token persistence.
+// Captures lastAccountToken so tests can verify it was passed (and not stored).
 private class FakeRegisterAgentUseCase : RegisterAgentUseCase {
     var result: RegistrationResult? = null
     var exception: Exception? = null
+    var lastAccountToken: String? = null
 
-    override suspend fun invoke(symbol: String, faction: FactionSymbol): RegistrationResult {
+    override suspend fun invoke(
+        symbol: String,
+        faction: FactionSymbol,
+        accountToken: String
+    ): RegistrationResult {
+        lastAccountToken = accountToken
         exception?.let { throw it }
         return result ?: throw IllegalStateException("No result configured")
     }
@@ -75,8 +82,9 @@ class AuthViewModelTest {
         assertEquals(AuthTab.NEW_AGENT, state.selectedTab)
         assertEquals("", state.callsign)
         assertEquals(FactionSymbol.COSMIC, state.selectedFaction)
+        assertEquals("", state.accountToken)
         assertFalse(state.isRegistering)
-        assertEquals("", state.token)
+        assertEquals("", state.agentToken)
         assertFalse(state.isImporting)
         assertNull(state.error)
     }
@@ -107,9 +115,15 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun tokenChanged_updatesToken() {
-        viewModel.onEvent(AuthEvent.TokenChanged("my-bearer-token"))
-        assertEquals("my-bearer-token", viewModel.uiState.value.token)
+    fun accountTokenChanged_updatesAccountToken() {
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
+        assertEquals("my-account-token", viewModel.uiState.value.accountToken)
+    }
+
+    @Test
+    fun agentTokenChanged_updatesAgentToken() {
+        viewModel.onEvent(AuthEvent.AgentTokenChanged("my-agent-token"))
+        assertEquals("my-agent-token", viewModel.uiState.value.agentToken)
     }
 
     @Test
@@ -120,12 +134,22 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun registerClicked_blankAccountToken_setsError() {
+        viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        // accountToken is blank by default; callsign validation passes first
+        viewModel.onEvent(AuthEvent.RegisterClicked)
+        assertEquals("Account token cannot be empty", viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isRegistering)
+    }
+
+    @Test
     fun registerClicked_success_navigatesToDashboard() = runTest {
         registerUseCase.result = RegistrationResult(
             agent = Agent("acc-1", "CMD", "HQ", 100000L, "COSMIC", 1),
             token = "tok"
         )
         viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
 
         viewModel.navigationEvent.test {
             viewModel.onEvent(AuthEvent.RegisterClicked)
@@ -137,9 +161,46 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun registerClicked_trimsAccountToken() = runTest {
+        registerUseCase.result = RegistrationResult(
+            agent = Agent("acc-1", "CMD", "HQ", 100000L, "COSMIC", 1),
+            token = "tok"
+        )
+        viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("  my-account-token  "))
+
+        viewModel.navigationEvent.test {
+            viewModel.onEvent(AuthEvent.RegisterClicked)
+            testDispatcher.scheduler.advanceUntilIdle()
+            awaitItem()
+        }
+
+        assertEquals("my-account-token", registerUseCase.lastAccountToken)
+    }
+
+    @Test
+    fun registerClicked_doesNotSaveAccountTokenToRepository() = runTest {
+        registerUseCase.result = RegistrationResult(
+            agent = Agent("acc-1", "CMD", "HQ", 100000L, "COSMIC", 1),
+            token = "agent-tok"
+        )
+        viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
+
+        viewModel.navigationEvent.test {
+            viewModel.onEvent(AuthEvent.RegisterClicked)
+            testDispatcher.scheduler.advanceUntilIdle()
+            awaitItem()
+        }
+
+        assertNotEquals("my-account-token", tokenRepository.savedToken)
+    }
+
+    @Test
     fun registerClicked_failure_setsError() = runTest {
         registerUseCase.exception = RuntimeException("Agent already exists")
         viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
         viewModel.onEvent(AuthEvent.RegisterClicked)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -157,7 +218,7 @@ class AuthViewModelTest {
 
     @Test
     fun importClicked_success_savesTokenAndNavigates() = runTest {
-        viewModel.onEvent(AuthEvent.TokenChanged("my-token"))
+        viewModel.onEvent(AuthEvent.AgentTokenChanged("my-token"))
 
         viewModel.navigationEvent.test {
             viewModel.onEvent(AuthEvent.ImportClicked)
@@ -171,7 +232,7 @@ class AuthViewModelTest {
 
     @Test
     fun importClicked_trimsWhitespace() = runTest {
-        viewModel.onEvent(AuthEvent.TokenChanged("  my-token  "))
+        viewModel.onEvent(AuthEvent.AgentTokenChanged("  my-token  "))
 
         viewModel.navigationEvent.test {
             viewModel.onEvent(AuthEvent.ImportClicked)
@@ -196,6 +257,7 @@ class AuthViewModelTest {
             httpStatus = 409
         )
         viewModel.onEvent(AuthEvent.CallsignChanged("TAKEN"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
         viewModel.onEvent(AuthEvent.RegisterClicked)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -210,6 +272,7 @@ class AuthViewModelTest {
             httpStatus = 409
         )
         viewModel.onEvent(AuthEvent.CallsignChanged("RESERVED"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
         viewModel.onEvent(AuthEvent.RegisterClicked)
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -224,6 +287,7 @@ class AuthViewModelTest {
             httpStatus = 503
         )
         viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
+        viewModel.onEvent(AuthEvent.AccountTokenChanged("my-account-token"))
         viewModel.onEvent(AuthEvent.RegisterClicked)
         testDispatcher.scheduler.advanceUntilIdle()
 

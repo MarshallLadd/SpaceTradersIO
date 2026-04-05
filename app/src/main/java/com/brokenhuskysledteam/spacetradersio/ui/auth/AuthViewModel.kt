@@ -19,8 +19,11 @@ import javax.inject.Inject
 
 // Drives the auth screen's two flows: new agent registration and token import.
 //
-// Registration delegates to RegisterAgentUseCase which calls the API and persists
-// the token. Token import uses a "store-and-go" approach — the token is saved
+// Registration delegates to RegisterAgentUseCase which calls the API (using the
+// caller-supplied AccountToken) and persists the returned AgentToken. The
+// AccountToken is passed through and immediately discarded — never stored.
+//
+// Token import uses a "store-and-go" approach — the AgentToken is saved
 // immediately and the dashboard's first API call validates it. If that call
 // returns 401/403, DashboardViewModel clears the token and sends the user back.
 //
@@ -43,7 +46,8 @@ class AuthViewModel @Inject constructor(
             is AuthEvent.TabSelected -> _uiState.update { it.copy(selectedTab = event.tab, error = null) }
             is AuthEvent.CallsignChanged -> _uiState.update { it.copy(callsign = event.value) }
             is AuthEvent.FactionSelected -> _uiState.update { it.copy(selectedFaction = event.faction) }
-            is AuthEvent.TokenChanged -> _uiState.update { it.copy(token = event.value) }
+            is AuthEvent.AccountTokenChanged -> _uiState.update { it.copy(accountToken = event.value) }
+            is AuthEvent.AgentTokenChanged -> _uiState.update { it.copy(agentToken = event.value) }
             is AuthEvent.RegisterClicked -> register()
             is AuthEvent.ImportClicked -> importToken()
             is AuthEvent.ErrorDismissed -> _uiState.update { it.copy(error = null) }
@@ -56,10 +60,14 @@ class AuthViewModel @Inject constructor(
             _uiState.update { it.copy(error = "Callsign cannot be empty") }
             return
         }
+        if (state.accountToken.isBlank()) {
+            _uiState.update { it.copy(error = "Account token cannot be empty") }
+            return
+        }
         _uiState.update { it.copy(isRegistering = true, error = null) }
         viewModelScope.launch {
             try {
-                registerAgentUseCase(state.callsign.trim(), state.selectedFaction)
+                registerAgentUseCase(state.callsign.trim(), state.selectedFaction, state.accountToken.trim())
                 _uiState.update { it.copy(isRegistering = false) }
                 _navigationEvent.send(NavigationTarget.Dashboard)
             } catch (e: SpaceTradersApiException) {
@@ -77,12 +85,12 @@ class AuthViewModel @Inject constructor(
 
     private fun importToken() {
         val state = _uiState.value
-        if (state.token.isBlank()) {
+        if (state.agentToken.isBlank()) {
             _uiState.update { it.copy(error = "Token cannot be empty") }
             return
         }
         _uiState.update { it.copy(isImporting = true, error = null) }
-        tokenRepository.saveToken(state.token.trim())
+        tokenRepository.saveToken(state.agentToken.trim())
         _uiState.update { it.copy(isImporting = false) }
         viewModelScope.launch {
             _navigationEvent.send(NavigationTarget.Dashboard)
