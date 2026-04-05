@@ -8,8 +8,11 @@ data class AuthUiState(
     val selectedTab: AuthTab = AuthTab.NEW_AGENT,
     val callsign: String = "",
     val selectedFaction: FactionSymbol = FactionSymbol.COSMIC,
+    // Account token: entered by the user for registration only; never persisted.
+    val accountToken: String = "",
     val isRegistering: Boolean = false,
-    val token: String = "",
+    // Agent token: entered by the user on the Import Token tab to resume an existing agent.
+    val agentToken: String = "",
     val isImporting: Boolean = false,
     val error: String? = null
 )
@@ -22,7 +25,8 @@ sealed interface AuthEvent {
     data class TabSelected(val tab: AuthTab) : AuthEvent
     data class CallsignChanged(val value: String) : AuthEvent
     data class FactionSelected(val faction: FactionSymbol) : AuthEvent
-    data class TokenChanged(val value: String) : AuthEvent
+    data class AccountTokenChanged(val value: String) : AuthEvent
+    data class AgentTokenChanged(val value: String) : AuthEvent
     data object RegisterClicked : AuthEvent
     data object ImportClicked : AuthEvent
     data object ErrorDismissed : AuthEvent
