@@ -68,28 +68,28 @@ class RegisterAgentUseCaseTest {
     @Test
     fun invoke_savesTokenToRepository() = runTest {
         val tokenRepo = FakeTokenRepository(storedToken = null)
-        buildUseCase(tokenRepo).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        buildUseCase(tokenRepo).invoke("TEST_AGENT", FactionSymbol.COSMIC, "test-account-token")
 
         assertEquals("test-bearer-token", tokenRepo.storedToken)
     }
 
     @Test
     fun invoke_returnsAgentWithCorrectSymbol() = runTest {
-        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC, "test-account-token")
 
         assertEquals("TEST_AGENT", result.agent.symbol)
     }
 
     @Test
     fun invoke_returnsTokenInResult() = runTest {
-        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC, "test-account-token")
 
         assertEquals("test-bearer-token", result.token)
     }
 
     @Test
     fun invoke_agentAccountIdMappedFromResponse() = runTest {
-        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC)
+        val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC, "test-account-token")
 
         assertEquals("acc-abc123", result.agent.accountId)
     }

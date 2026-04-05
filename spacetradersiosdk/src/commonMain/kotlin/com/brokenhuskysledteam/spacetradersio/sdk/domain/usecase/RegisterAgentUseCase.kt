@@ -23,7 +23,7 @@ interface RegisterAgentUseCase {
     suspend operator fun invoke(
         symbol: String,
         faction: FactionSymbol = FactionSymbol.COSMIC,
-        accountToken: String = ""
+        accountToken: String
     ): RegistrationResult
 }
 
