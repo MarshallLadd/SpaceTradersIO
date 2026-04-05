@@ -45,4 +45,40 @@ class EnumParsingTest {
     fun shipNavStatus_unknownValue_fallsBackToDocked() {
         assertEquals(ShipNavStatus.DOCKED, ShipNavStatus.fromString("UNKNOWN_STATUS"))
     }
+
+    // ── ShipNavFlightMode ────────────────────────────────────────────────────
+
+    @Test
+    fun shipNavFlightMode_knownValue_returnsCorrectEntry() {
+        assertEquals(ShipNavFlightMode.BURN, ShipNavFlightMode.fromString("BURN"))
+    }
+
+    @Test
+    fun shipNavFlightMode_unknownValue_fallsBackToCruise() {
+        assertEquals(ShipNavFlightMode.CRUISE, ShipNavFlightMode.fromString("FUTURE_MODE"))
+    }
+
+    // ── ShipRole ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun shipRole_knownValue_returnsCorrectEntry() {
+        assertEquals(ShipRole.EXCAVATOR, ShipRole.fromString("EXCAVATOR"))
+    }
+
+    @Test
+    fun shipRole_unknownValue_fallsBackToCommand() {
+        assertEquals(ShipRole.COMMAND, ShipRole.fromString("UNKNOWN_ROLE"))
+    }
+
+    // ── WaypointType ─────────────────────────────────────────────────────────
+
+    @Test
+    fun waypointType_knownValue_returnsCorrectEntry() {
+        assertEquals(WaypointType.JUMP_GATE, WaypointType.fromString("JUMP_GATE"))
+    }
+
+    @Test
+    fun waypointType_unknownValue_fallsBackToPlanet() {
+        assertEquals(WaypointType.PLANET, WaypointType.fromString("UNKNOWN_TYPE"))
+    }
 }

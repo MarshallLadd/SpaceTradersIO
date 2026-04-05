@@ -75,8 +75,9 @@ di/          <- Hilt module bridging SDK types into Android DI graph
 navigation/  <- Navigation Compose routes (@Serializable objects) and NavHost
 ui/auth/     <- Auth screen: register + token import (UDF: StateFlow + sealed events)
 ui/dashboard/ <- Dashboard screen: agent info, logout (UDF: StateFlow + sealed events)
-ui/components/ <- Reusable themed composables: TerminalCard, TerminalButton, TerminalTextField, ScanlineOverlay
+ui/components/ <- Reusable themed composables: TerminalCard, TerminalButton, TerminalTextField, TerminalProgressBar, ScanlineOverlay
 ui/theme/    <- Retro terminal theme (dark-only, green-on-black, monospace, sharp corners)
+ui/ships/    <- Ship list + detail screens (UDF: StateFlow + sealed events)
 ```
 
 ViewModels use `Channel<NavigationTarget>` (not SharedFlow) for one-shot navigation to avoid re-delivery on config change.
@@ -119,6 +120,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 
 - **Pure unit tests** (mappers, enums): no extra setup needed beyond `kotlin.test`
 - **Use case tests**: back `AccountsApi`/`ContractsApi` with Ktor `MockEngine`; use hand-written fakes for repository interfaces (no mockk); use `runTest` for suspend functions
+- **MockEngine helper must be a `MockRequestHandleScope` extension** — `private fun MockRequestHandleScope.okJson(...) = respond(...)`, not a standalone function. `respond` is only available as an extension on that scope.
 - **Test `HttpClient` must include `defaultRequest { contentType(ContentType.Application.Json) }`** — omitting it causes `Fail to prepare request body` because `setBody()` requires Content-Type, matching the production `SpaceTradersClient` setup
 - **App ViewModel tests** (`app/src/test/`): use `kotlin-test-junit` bridge for JVM runner compatibility. Hand-written fakes implement SDK interfaces directly (no MockEngine needed). Use `StandardTestDispatcher` + `advanceUntilIdle()` for coroutine control, Turbine for `Channel`/`Flow` assertions.
 
@@ -138,6 +140,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - Auth: Bearer token (JWT). Two token types: `AgentToken` (per-agent gameplay) and `AccountToken` (account management). Agent registration returns the bearer token directly.
 - The OpenAPI spec (`../OpenAPISpec/space_trader_open_api_spec.json`) is the ground truth — always check it before implementing a new endpoint.
 - Pagination is used extensively: requests accept `page` and `limit`, responses include a `meta` object with `total`, `page`, `limit`.
+- **POST endpoints with no body must use `setBody("{}")`** — `SpaceTradersClient`'s `defaultRequest` sets `Content-Type: application/json` globally; sending an empty body with that header causes a 422 from the API. Always pass `setBody("{}")` for action endpoints (orbit, dock, etc.) even when the API spec shows no request body.
 
 ## Mobile MCP (Android Emulator Interaction)
 

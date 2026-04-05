@@ -11,3 +11,9 @@ object AuthRoute
 
 @Serializable
 object DashboardRoute
+
+@Serializable
+object ShipListRoute
+
+@Serializable
+data class ShipDetailRoute(val shipSymbol: String)

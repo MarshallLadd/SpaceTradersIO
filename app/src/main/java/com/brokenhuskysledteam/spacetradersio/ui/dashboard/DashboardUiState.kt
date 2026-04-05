@@ -15,4 +15,5 @@ sealed interface DashboardEvent {
     data object RetryClicked : DashboardEvent
     data object LogoutClicked : DashboardEvent
     data object ErrorDismissed : DashboardEvent
+    data object FleetCardClicked : DashboardEvent
 }

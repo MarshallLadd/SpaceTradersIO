@@ -45,6 +45,9 @@ class DashboardViewModel @Inject constructor(
             is DashboardEvent.RetryClicked -> loadAgent()
             is DashboardEvent.LogoutClicked -> logout()
             is DashboardEvent.ErrorDismissed -> _uiState.update { it.copy(error = null) }
+            is DashboardEvent.FleetCardClicked -> viewModelScope.launch {
+                _navigationEvent.send(NavigationTarget.ShipList)
+            }
         }
     }
 
@@ -57,8 +60,8 @@ class DashboardViewModel @Inject constructor(
             } catch (e: SpaceTradersApiException) {
                 when (e.error) {
                     is SpaceTradersError.AuthError -> {
-                        _uiState.update { it.copy(isLoading = false, error = e.message) }
                         tokenRepository.clearToken()
+                        _navigationEvent.send(NavigationTarget.Auth)
                     }
 
                     else -> _uiState.update { it.copy(isLoading = false, error = e.message) }
