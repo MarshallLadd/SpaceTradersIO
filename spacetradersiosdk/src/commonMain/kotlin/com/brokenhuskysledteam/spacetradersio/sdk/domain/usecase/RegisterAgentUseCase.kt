@@ -17,11 +17,13 @@ data class RegistrationResult(
 interface RegisterAgentUseCase {
     /**
      * Sends a registration request with the given [symbol] and [faction],
-     * saves the returned bearer token, and returns the agent + token pair.
+     * authenticated with the provided [accountToken].
+     * Saves the returned bearer token and returns the agent + token pair.
      */
     suspend operator fun invoke(
         symbol: String,
-        faction: FactionSymbol = FactionSymbol.COSMIC
+        faction: FactionSymbol = FactionSymbol.COSMIC,
+        accountToken: String
     ): RegistrationResult
 }
 
@@ -34,11 +36,13 @@ class RegisterAgentUseCaseImpl(
 ) : RegisterAgentUseCase {
     override suspend operator fun invoke(
         symbol: String,
-        faction: FactionSymbol
+        faction: FactionSymbol,
+        accountToken: String
     ): RegistrationResult {
         val response = accountsApi.register(
             symbol = symbol,
-            faction = faction.name
+            faction = faction.name,
+            accountToken = accountToken
         )
         tokenRepository.saveToken(response.token)
         return RegistrationResult(

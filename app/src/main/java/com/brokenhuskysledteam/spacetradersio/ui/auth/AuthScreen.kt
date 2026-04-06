@@ -176,6 +176,15 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        TerminalTextField(
+            value = uiState.accountToken,
+            onValueChange = { onEvent(AuthEvent.AccountTokenChanged(it)) },
+            label = "Account Token",
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         ExposedDropdownMenuBox(
             expanded = factionExpanded,
             onExpandedChange = { factionExpanded = it }
@@ -227,8 +236,8 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
 private fun ImportTokenTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
     TerminalCard(title = "Import Token") {
         TerminalTextField(
-            value = uiState.token,
-            onValueChange = { onEvent(AuthEvent.TokenChanged(it)) },
+            value = uiState.agentToken,
+            onValueChange = { onEvent(AuthEvent.AgentTokenChanged(it)) },
             label = "Bearer Token",
             modifier = Modifier.fillMaxWidth()
         )

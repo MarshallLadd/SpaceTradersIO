@@ -52,7 +52,7 @@ object SdkModule {
     @Provides
     @Singleton
     fun provideAccountsApi(client: SpaceTradersClient): AccountsApi =
-        AccountsApi(client.unauthenticated)
+        AccountsApi(client)
 
     @Provides
     @Singleton
