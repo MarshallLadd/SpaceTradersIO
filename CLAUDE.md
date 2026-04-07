@@ -122,6 +122,7 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - **Use case tests**: back `AccountsApi`/`ContractsApi` with Ktor `MockEngine`; use hand-written fakes for repository interfaces (no mockk); use `runTest` for suspend functions
 - **MockEngine helper must be a `MockRequestHandleScope` extension** — `private fun MockRequestHandleScope.okJson(...) = respond(...)`, not a standalone function. `respond` is only available as an extension on that scope.
 - **Test `HttpClient` must include `defaultRequest { contentType(ContentType.Application.Json) }`** — omitting it causes `Fail to prepare request body` because `setBody()` requires Content-Type, matching the production `SpaceTradersClient` setup
+- **`buildMockSpaceTradersClient` must pass the token through** — the factory lambda must use `{ token -> ... }` not `{ _ -> ... }`, and append `Authorization: Bearer $token` when non-null. Ignoring the token means `authenticatedWith()` cannot be tested.
 - **App ViewModel tests** (`app/src/test/`): use `kotlin-test-junit` bridge for JVM runner compatibility. Hand-written fakes implement SDK interfaces directly (no MockEngine needed). Use `StandardTestDispatcher` + `advanceUntilIdle()` for coroutine control, Turbine for `Channel`/`Flow` assertions.
 
 ## Gotchas
@@ -133,11 +134,13 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - In non-KMP JVM modules (like `:app`), use `kotlin-test-junit` (not plain `kotlin-test`) to get `@BeforeTest`/`@AfterTest` annotations resolved. The plain artifact lacks the JVM-specific bridge.
 - Material 3 `Shapes` slots require `CornerBasedShape` — use `RoundedCornerShape(0.dp)` for sharp corners, not `RectangleShape` (which is a generic `Shape` and won't compile).
 - `assertIs<T>()` returns `T`, not `Unit`. Using it as an expression body (`fun test() = assertIs<Foo>(x)`) makes JUnit reject the test method as non-void. Use block bodies: `fun test() { assertIs<Foo>(x) }`.
+- **Windows worktree removal may fail with "Filename too long"** — deep Gradle build output hits MAX_PATH (260 chars). Delete the directory manually then run `git worktree prune` to clean git's metadata.
 
 ## SpaceTraders API
 
 - Base URL: `https://api.spacetraders.io/v2`
-- Auth: Bearer token (JWT). Two token types: `AgentToken` (per-agent gameplay) and `AccountToken` (account management). Agent registration returns the bearer token directly.
+- Auth: Bearer token (JWT). Two token types: `AgentToken` (per-agent gameplay) and `AccountToken` (account management). Agent registration returns the AgentToken directly.
+- `POST /register` requires `AccountToken` (not `AgentToken`) — the API validates the JWT `sub` claim and returns a clear error if the wrong type is sent.
 - The OpenAPI spec (`../OpenAPISpec/space_trader_open_api_spec.json`) is the ground truth — always check it before implementing a new endpoint.
 - Pagination is used extensively: requests accept `page` and `limit`, responses include a `meta` object with `total`, `page`, `limit`.
 - **POST endpoints with no body must use `setBody("{}")`** — `SpaceTradersClient`'s `defaultRequest` sets `Content-Type: application/json` globally; sending an empty body with that header causes a 422 from the API. Always pass `setBody("{}")` for action endpoints (orbit, dock, etc.) even when the API spec shows no request body.

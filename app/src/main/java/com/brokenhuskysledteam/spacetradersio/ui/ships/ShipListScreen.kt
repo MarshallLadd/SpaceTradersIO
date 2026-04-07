@@ -146,11 +146,13 @@ private fun ShipSummaryCard(ship: ShipSummary, onClick: () -> Unit) {
         Spacer(modifier = Modifier.height(4.dp))
         ShipDataRow("STATUS", ship.status.name)
         Spacer(modifier = Modifier.height(4.dp))
-        ShipDataRow("LOCATION", "${ship.systemSymbol} / ${ship.waypointSymbol}")
 
         if (ship.status == ShipNavStatus.IN_TRANSIT && ship.arrivalTime != null && ship.departureTime != null) {
+            ShipDataRow("DESTINATION", "${ship.systemSymbol} / ${ship.waypointSymbol}")
             Spacer(modifier = Modifier.height(8.dp))
             TransitProgress(ship = ship)
+        } else {
+            ShipDataRow("LOCATION", "${ship.systemSymbol} / ${ship.waypointSymbol}")
         }
     }
 }

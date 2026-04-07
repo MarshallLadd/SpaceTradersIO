@@ -187,17 +187,20 @@ private fun NavigationCard(ship: ShipDetail) {
         ShipDetailDataRow("FLIGHT MODE", ship.flightMode.name)
         Spacer(modifier = Modifier.height(4.dp))
         ShipDetailDataRow("SYSTEM", ship.systemSymbol)
-        Spacer(modifier = Modifier.height(4.dp))
-        ShipDetailDataRow("WAYPOINT", ship.waypointSymbol)
 
         if (ship.navStatus == ShipNavStatus.IN_TRANSIT &&
             ship.arrivalTime != null &&
             ship.departureTime != null
         ) {
             Spacer(modifier = Modifier.height(4.dp))
+            ShipDetailDataRow("ORIGIN", ship.waypointSymbol)
+            Spacer(modifier = Modifier.height(4.dp))
             ShipDetailDataRow("DESTINATION", "${ship.destinationSymbol} (${ship.destinationType.name})")
             Spacer(modifier = Modifier.height(8.dp))
             DetailTransitProgress(ship = ship)
+        } else {
+            Spacer(modifier = Modifier.height(4.dp))
+            ShipDetailDataRow("LOCATION", ship.waypointSymbol)
         }
     }
 }
