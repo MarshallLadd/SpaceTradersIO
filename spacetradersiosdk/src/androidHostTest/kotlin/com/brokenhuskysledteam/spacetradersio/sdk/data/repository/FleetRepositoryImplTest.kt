@@ -17,6 +17,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MetaDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipRegistrationDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -100,21 +102,21 @@ class FleetRepositoryImplTest {
 
     @Test
     fun getMyShips_returnsCorrectNumberOfShips() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(ships = listOf(minimalShipDto("LADD-1"), minimalShipDto("LADD-2"))))
+        val repo = FleetRepositoryImpl(FakeFleetApi(ships = listOf(minimalShipDto("LADD-1"), minimalShipDto("LADD-2"))), FleetStateStore(), RefreshScheduler(this))
         val result = repo.getMyShips(page = 1, limit = 20)
         assertEquals(2, result.size)
     }
 
     @Test
     fun getMyShips_mapsSymbolToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi())
+        val repo = FleetRepositoryImpl(FakeFleetApi(), FleetStateStore(), RefreshScheduler(this))
         val result = repo.getMyShips(page = 1, limit = 20)
         assertEquals("LADD-1", result.first().symbol)
     }
 
     @Test
     fun getMyShips_mapsNavStatusToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(ships = listOf(minimalShipDto(navStatus = "IN_ORBIT"))))
+        val repo = FleetRepositoryImpl(FakeFleetApi(ships = listOf(minimalShipDto(navStatus = "IN_ORBIT"))), FleetStateStore(), RefreshScheduler(this))
         val result = repo.getMyShips(page = 1, limit = 20)
         assertEquals(ShipNavStatus.IN_ORBIT, result.first().nav.status)
     }
@@ -122,21 +124,21 @@ class FleetRepositoryImplTest {
     @Test
     fun getMyShips_forwardsPaginationParams() = runTest {
         val fake = FakeFleetApi()
-        FleetRepositoryImpl(fake).getMyShips(page = 3, limit = 5)
+        FleetRepositoryImpl(fake, FleetStateStore(), RefreshScheduler(this)).getMyShips(page = 3, limit = 5)
         assertEquals(3, fake.lastGetMyShipsPage)
         assertEquals(5, fake.lastGetMyShipsLimit)
     }
 
     @Test
     fun getMyShip_mapsSymbolToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(singleShip = minimalShipDto("LADD-3")))
+        val repo = FleetRepositoryImpl(FakeFleetApi(singleShip = minimalShipDto("LADD-3")), FleetStateStore(), RefreshScheduler(this))
         val result = repo.getMyShip("LADD-3")
         assertEquals("LADD-3", result.symbol)
     }
 
     @Test
     fun getMyShip_mapsFuelCurrentToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi())
+        val repo = FleetRepositoryImpl(FakeFleetApi(), FleetStateStore(), RefreshScheduler(this))
         val result = repo.getMyShip("LADD-1")
         assertEquals(400, result.fuel.current)
     }

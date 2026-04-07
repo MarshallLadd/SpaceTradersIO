@@ -11,6 +11,11 @@ import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositor
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManagerImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCaseImpl
@@ -29,15 +34,17 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 // Hilt module that bridges the KMP SDK into the Android DI graph.
-// All SDK types (repositories, API clients, use cases) are provided here so
+// All SDK types (repositories, API clients, use cases, session) are provided here so
 // ViewModels can receive them via constructor injection.
 //
 // Singleton-scoped bindings share one instance across the app's lifetime.
-// Use-case bindings are unscoped — each injection site gets a fresh instance,
-// which is fine since they're stateless.
+// Session-scoped state providers are unscoped — they delegate to SessionManager.requireSession(),
+// which is safe because authenticated screens are always behind navigation guards.
 @Module
 @InstallIn(SingletonComponent::class)
 object SdkModule {
+
+    // --- Infrastructure (Singleton) ---
 
     @Provides
     @Singleton
@@ -48,6 +55,13 @@ object SdkModule {
     @Singleton
     fun provideSpaceTradersClient(tokenRepository: TokenRepository): SpaceTradersClient =
         SpaceTradersClient(tokenRepository)
+
+    @Provides
+    @Singleton
+    fun provideSessionManager(tokenRepository: TokenRepository): SessionManager =
+        SessionManagerImpl(tokenRepository)
+
+    // --- API Clients (Singleton) ---
 
     @Provides
     @Singleton
@@ -65,10 +79,40 @@ object SdkModule {
         ContractsApi(client)
 
     @Provides
+    @Singleton
+    fun provideFleetApi(client: SpaceTradersClient): FleetApi =
+        FleetApiImpl(client)
+
+    // --- Session-Scoped State (Unscoped — fetches from current session on each injection) ---
+
+    @Provides
+    fun provideFleetStateStore(sm: SessionManager): FleetStateStore =
+        sm.requireSession().fleetStateStore
+
+    @Provides
+    fun provideAgentStateStore(sm: SessionManager): AgentStateStore =
+        sm.requireSession().agentStateStore
+
+    @Provides
+    fun provideRefreshScheduler(sm: SessionManager): RefreshScheduler =
+        sm.requireSession().refreshScheduler
+
+    // --- Repositories ---
+
+    @Provides
+    fun provideFleetRepository(
+        fleetApi: FleetApi,
+        fleetStateStore: FleetStateStore,
+        refreshScheduler: RefreshScheduler
+    ): FleetRepository = FleetRepositoryImpl(fleetApi, fleetStateStore, refreshScheduler)
+
+    // --- Use Cases ---
+
+    @Provides
     fun provideRegisterAgentUseCase(
         accountsApi: AccountsApi,
-        tokenRepository: TokenRepository
-    ): RegisterAgentUseCase = RegisterAgentUseCaseImpl(accountsApi, tokenRepository)
+        sessionManager: SessionManager
+    ): RegisterAgentUseCase = RegisterAgentUseCaseImpl(accountsApi, sessionManager)
 
     @Provides
     fun provideAcceptContractUseCase(contractsApi: ContractsApi): AcceptContractUseCase =
@@ -83,24 +127,21 @@ object SdkModule {
         FulfillContractUseCase(contractsApi)
 
     @Provides
-    @Singleton
-    fun provideFleetApi(client: SpaceTradersClient): FleetApi =
-        FleetApiImpl(client)
+    fun provideOrbitShipUseCase(
+        fleetApi: FleetApi,
+        fleetStateStore: FleetStateStore
+    ): OrbitShipUseCase = OrbitShipUseCaseImpl(fleetApi, fleetStateStore)
 
     @Provides
-    @Singleton
-    fun provideFleetRepository(fleetApi: FleetApi): FleetRepository =
-        FleetRepositoryImpl(fleetApi)
+    fun provideDockShipUseCase(
+        fleetApi: FleetApi,
+        fleetStateStore: FleetStateStore
+    ): DockShipUseCase = DockShipUseCaseImpl(fleetApi, fleetStateStore)
 
     @Provides
-    fun provideOrbitShipUseCase(fleetApi: FleetApi): OrbitShipUseCase =
-        OrbitShipUseCaseImpl(fleetApi)
-
-    @Provides
-    fun provideDockShipUseCase(fleetApi: FleetApi): DockShipUseCase =
-        DockShipUseCaseImpl(fleetApi)
-
-    @Provides
-    fun provideRefuelShipUseCase(fleetApi: FleetApi): RefuelShipUseCase =
-        RefuelShipUseCaseImpl(fleetApi)
+    fun provideRefuelShipUseCase(
+        fleetApi: FleetApi,
+        fleetStateStore: FleetStateStore,
+        agentStateStore: AgentStateStore
+    ): RefuelShipUseCase = RefuelShipUseCaseImpl(fleetApi, fleetStateStore, agentStateStore)
 }

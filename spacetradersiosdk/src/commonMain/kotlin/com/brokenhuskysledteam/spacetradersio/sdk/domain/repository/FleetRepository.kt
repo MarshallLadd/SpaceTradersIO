@@ -7,4 +7,5 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 interface FleetRepository {
     suspend fun getMyShips(page: Int = 1, limit: Int = 20): List<Ship>
     suspend fun getMyShip(shipSymbol: String): Ship
+    suspend fun refreshMyShips(page: Int = 1, limit: Int = 20)
 }

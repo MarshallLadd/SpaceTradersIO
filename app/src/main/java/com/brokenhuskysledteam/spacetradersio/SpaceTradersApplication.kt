@@ -1,9 +1,20 @@
 package com.brokenhuskysledteam.spacetradersio
 
 import android.app.Application
+import androidx.lifecycle.ProcessLifecycleOwner
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
-// Required by Hilt — triggers code generation for the dependency graph.
-// Must be declared in AndroidManifest.xml as android:name=".SpaceTradersApplication".
 @HiltAndroidApp
-class SpaceTradersApplication : Application()
+class SpaceTradersApplication : Application() {
+
+    @Inject lateinit var sessionManager: SessionManager
+    @Inject lateinit var appLifecycleObserver: AppLifecycleObserver
+
+    override fun onCreate() {
+        super.onCreate()
+        sessionManager.restoreIfAuthenticated()
+        ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
+    }
+}

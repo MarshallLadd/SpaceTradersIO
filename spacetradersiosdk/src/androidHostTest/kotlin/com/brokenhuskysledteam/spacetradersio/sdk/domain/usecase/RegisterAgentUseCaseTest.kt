@@ -2,6 +2,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManagerImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.buildMockSpaceTradersClient
 import io.ktor.client.engine.mock.respond
@@ -12,6 +13,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 private const val REGISTER_RESPONSE = """
 {
@@ -62,7 +64,7 @@ class RegisterAgentUseCaseTest {
             status = HttpStatusCode.Created,
             headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
         )}
-        return RegisterAgentUseCaseImpl(AccountsApi(client), tokenRepo)
+        return RegisterAgentUseCaseImpl(AccountsApi(client), SessionManagerImpl(tokenRepo))
     }
 
     @Test
@@ -92,5 +94,22 @@ class RegisterAgentUseCaseTest {
         val result = buildUseCase(FakeTokenRepository(storedToken = null)).invoke("TEST_AGENT", FactionSymbol.COSMIC, "test-account-token")
 
         assertEquals("acc-abc123", result.agent.accountId)
+    }
+
+    @Test
+    fun invoke_createsActiveSession() = runTest {
+        val tokenRepo = FakeTokenRepository(storedToken = null)
+        val sessionManager = SessionManagerImpl(tokenRepo)
+        val client = buildMockSpaceTradersClient(
+            tokenRepository = FakeTokenRepository(storedToken = null)
+        ) { respond(
+            content = REGISTER_RESPONSE,
+            status = HttpStatusCode.Created,
+            headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+        )}
+        RegisterAgentUseCaseImpl(AccountsApi(client), sessionManager)
+            .invoke("TEST_AGENT", FactionSymbol.COSMIC, "test-account-token")
+
+        assertNotNull(sessionManager.requireSession())
     }
 }

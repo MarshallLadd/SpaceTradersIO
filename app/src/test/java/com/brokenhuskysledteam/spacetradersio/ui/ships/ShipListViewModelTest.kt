@@ -15,6 +15,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStat
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -28,7 +29,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 private val NOW = Instant.parse("2025-06-01T10:00:00.000Z")
@@ -68,11 +68,14 @@ private fun fakeShip(
     cooldown = Cooldown(shipSymbol = symbol, totalSeconds = 0, remainingSeconds = 0, expiration = null)
 )
 
-private class FakeFleetRepository : FleetRepository {
-    var ships: List<Ship> = listOf(fakeShip())
-    var exception: Exception? = null
+// Writes ships to the store in refreshMyShips so the ViewModel's combine pipeline
+// reflects the loaded data via FleetStateStore.entities.
+private class FakeFleetRepository(
+    private val store: FleetStateStore,
+    var ships: List<Ship> = listOf(fakeShip()),
+    var exception: Exception? = null,
     var singleShip: Ship = fakeShip()
-
+) : FleetRepository {
     override suspend fun getMyShips(page: Int, limit: Int): List<Ship> {
         exception?.let { throw it }
         return ships
@@ -80,7 +83,13 @@ private class FakeFleetRepository : FleetRepository {
 
     override suspend fun getMyShip(shipSymbol: String): Ship {
         exception?.let { throw it }
+        store.put(shipSymbol, singleShip)
         return singleShip
+    }
+
+    override suspend fun refreshMyShips(page: Int, limit: Int) {
+        exception?.let { throw it }
+        store.putAll(ships.associateBy { it.symbol })
     }
 }
 
@@ -88,12 +97,14 @@ private class FakeFleetRepository : FleetRepository {
 class ShipListViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private lateinit var store: FleetStateStore
     private lateinit var repository: FakeFleetRepository
 
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        repository = FakeFleetRepository()
+        store = FleetStateStore()
+        repository = FakeFleetRepository(store)
     }
 
     @AfterTest
@@ -101,13 +112,7 @@ class ShipListViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = ShipListViewModel(repository)
-
-    @Test
-    fun init_isLoadingTrue_beforeDataArrives() = runTest {
-        val viewModel = createViewModel()
-        assertTrue(viewModel.uiState.value.isLoading)
-    }
+    private fun createViewModel() = ShipListViewModel(store, repository)
 
     @Test
     fun init_loadsShipsSuccess_setsShips() = runTest {
@@ -174,7 +179,7 @@ class ShipListViewModelTest {
         val state = viewModel.uiState.value
         assertFalse(state.isLoading)
         assertEquals("Network failure", state.error)
-        assertTrue(state.ships.isEmpty())
+        assert(state.ships.isEmpty())
     }
 
     @Test
@@ -204,5 +209,17 @@ class ShipListViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
             assertEquals(NavigationTarget.ShipDetail("LADD-1"), awaitItem())
         }
+    }
+
+    @Test
+    fun storeAlreadyPopulated_doesNotCallRefreshMyShips() = runTest {
+        store.put("LADD-1", fakeShip("LADD-1"))
+        repository.exception = RuntimeException("Should not be called")
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // No error — refreshMyShips was skipped because store was not empty
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(1, viewModel.uiState.value.ships.size)
     }
 }

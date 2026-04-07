@@ -7,31 +7,36 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.time.Duration.Companion.seconds
 
-// Loads the authenticated agent's info on init and displays it.
-//
-// Handles auth failures (401/403) by clearing the stored token and navigating
-// back to auth — this is the validation path for imported tokens that turn out
-// to be invalid or expired. Other errors are shown inline with a retry option.
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val agentsApi: AgentsApi, private val tokenRepository: TokenRepository
+    private val agentsApi: AgentsApi,
+    private val agentStateStore: AgentStateStore,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(DashboardUiState())
-    val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    private val _error = MutableStateFlow<String?>(null)
+
+    val uiState: StateFlow<DashboardUiState> = combine(
+        agentStateStore.agent,
+        _isLoading,
+        _error
+    ) { agent, isLoading, error ->
+        DashboardUiState(agent = agent, isLoading = isLoading, error = error)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, DashboardUiState())
 
     private val _navigationEvent = Channel<NavigationTarget>(Channel.BUFFERED)
     val navigationEvent = _navigationEvent.receiveAsFlow()
@@ -44,7 +49,7 @@ class DashboardViewModel @Inject constructor(
         when (event) {
             is DashboardEvent.RetryClicked -> loadAgent()
             is DashboardEvent.LogoutClicked -> logout()
-            is DashboardEvent.ErrorDismissed -> _uiState.update { it.copy(error = null) }
+            is DashboardEvent.ErrorDismissed -> _error.value = null
             is DashboardEvent.FleetCardClicked -> viewModelScope.launch {
                 _navigationEvent.send(NavigationTarget.ShipList)
             }
@@ -52,32 +57,33 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun loadAgent() {
-        _uiState.update { it.copy(isLoading = true, error = null) }
+        _isLoading.value = true
+        _error.value = null
         viewModelScope.launch {
             try {
                 val agent = agentsApi.getMyAgent().toDomain()
-                _uiState.update { it.copy(agent = agent, isLoading = false) }
+                agentStateStore.update(agent)
+                _isLoading.value = false
             } catch (e: SpaceTradersApiException) {
                 when (e.error) {
                     is SpaceTradersError.AuthError -> {
-                        tokenRepository.clearToken()
+                        sessionManager.logout()
                         _navigationEvent.send(NavigationTarget.Auth)
                     }
-
-                    else -> _uiState.update { it.copy(isLoading = false, error = e.message) }
+                    else -> {
+                        _isLoading.value = false
+                        _error.value = e.message
+                    }
                 }
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false, error = e.message ?: "Failed to load agent"
-                    )
-                }
+                _isLoading.value = false
+                _error.value = e.message ?: "Failed to load agent"
             }
         }
     }
 
     private fun logout() {
-        tokenRepository.clearToken()
+        sessionManager.logout()
         viewModelScope.launch {
             _navigationEvent.send(NavigationTarget.Auth)
         }

@@ -6,7 +6,9 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SpaceTradersSession
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -22,12 +24,13 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// In-memory token store. Starts with a token to simulate a logged-in state.
-private class FakeTokenRepository(var savedToken: String? = "existing-token") : TokenRepository {
-    override fun getToken(): String? = savedToken
-    override fun saveToken(token: String) { savedToken = token }
-    override fun clearToken() { savedToken = null }
-    override fun hasToken(): Boolean = savedToken != null
+// Captures logout calls and exposes whether logout() was invoked.
+private class FakeSessionManager : SessionManager {
+    var logoutCalled = false
+    override fun requireSession(): SpaceTradersSession = error("Not implemented in tests")
+    override fun login(token: String) {}
+    override fun logout() { logoutCalled = true }
+    override fun restoreIfAuthenticated() {}
 }
 
 // Configurable fake — set agentResult for success or exception for failure.
@@ -48,21 +51,25 @@ private class FakeAgentsApi : AgentsApi {
 }
 
 // Tests for DashboardViewModel covering init loading, success/error states,
-// retry, logout with token clearing, and error dismissal.
+// retry, logout, and error dismissal.
 // The ViewModel calls loadAgent() in init, so tests must configure the fake
 // API *before* calling createViewModel().
+// Uses SharingStarted.Eagerly in the ViewModel, so uiState.value is stable
+// after advanceUntilIdle() without needing an explicit subscriber.
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private lateinit var tokenRepository: FakeTokenRepository
     private lateinit var agentsApi: FakeAgentsApi
+    private lateinit var agentStateStore: AgentStateStore
+    private lateinit var sessionManager: FakeSessionManager
 
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        tokenRepository = FakeTokenRepository()
         agentsApi = FakeAgentsApi()
+        agentStateStore = AgentStateStore()
+        sessionManager = FakeSessionManager()
     }
 
     @AfterTest
@@ -71,7 +78,7 @@ class DashboardViewModelTest {
     }
 
     private fun createViewModel(): DashboardViewModel =
-        DashboardViewModel(agentsApi, tokenRepository)
+        DashboardViewModel(agentsApi, agentStateStore, sessionManager)
 
     @Test
     fun init_loadsAgent_success() = runTest {
@@ -85,8 +92,6 @@ class DashboardViewModelTest {
         )
 
         val viewModel = createViewModel()
-        assertTrue(viewModel.uiState.value.isLoading)
-
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -130,7 +135,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun logoutClicked_clearsTokenAndNavigates() = runTest {
+    fun logoutClicked_callsSessionManagerLogoutAndNavigates() = runTest {
         agentsApi.agentResult = AgentDto("acc-1", "CMD", "HQ", 100L, "COSMIC", 1)
         val viewModel = createViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -141,7 +146,7 @@ class DashboardViewModelTest {
             assertEquals(NavigationTarget.Auth, awaitItem())
         }
 
-        assertNull(tokenRepository.savedToken)
+        assertTrue(sessionManager.logoutCalled)
     }
 
     @Test
@@ -152,11 +157,12 @@ class DashboardViewModelTest {
         assertNotNull(viewModel.uiState.value.error)
 
         viewModel.onEvent(DashboardEvent.ErrorDismissed)
+        testDispatcher.scheduler.advanceUntilIdle()
         assertNull(viewModel.uiState.value.error)
     }
 
     @Test
-    fun init_authError_clearsTokenAndNavigatesToAuth() = runTest {
+    fun init_authError_callsSessionManagerLogoutAndNavigatesToAuth() = runTest {
         agentsApi.exception = SpaceTradersApiException(
             error = SpaceTradersError.AuthError.InvalidToken(code = 4115, message = "Invalid token."),
             httpStatus = 401
@@ -167,7 +173,7 @@ class DashboardViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
             assertEquals(NavigationTarget.Auth, awaitItem())
         }
-        assertNull(tokenRepository.savedToken)
+        assertTrue(sessionManager.logoutCalled)
     }
 
     @Test

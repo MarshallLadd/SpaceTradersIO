@@ -4,22 +4,16 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Agent
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 
 data class RegistrationResult(
     val agent: Agent,
     val token: String
 )
 
-// Registers a new agent and persists the returned token.
-// Implemented by [RegisterAgentUseCaseImpl]; defined as an interface
-// so app-layer tests can substitute a fake without mock engines.
+// Registers a new agent and creates the auth-scoped session via SessionManager.login().
+// Defined as an interface so app-layer tests can substitute a fake without mock engines.
 interface RegisterAgentUseCase {
-    /**
-     * Sends a registration request with the given [symbol] and [faction],
-     * authenticated with the provided [accountToken].
-     * Saves the returned bearer token and returns the agent + token pair.
-     */
     suspend operator fun invoke(
         symbol: String,
         faction: FactionSymbol = FactionSymbol.COSMIC,
@@ -27,12 +21,9 @@ interface RegisterAgentUseCase {
     ): RegistrationResult
 }
 
-// Registers a new agent with the SpaceTraders API, then immediately
-// persists the returned bearer token so subsequent authenticated
-// requests can be made without re-registering.
 class RegisterAgentUseCaseImpl(
     private val accountsApi: AccountsApi,
-    private val tokenRepository: TokenRepository
+    private val sessionManager: SessionManager
 ) : RegisterAgentUseCase {
     override suspend operator fun invoke(
         symbol: String,
@@ -44,7 +35,7 @@ class RegisterAgentUseCaseImpl(
             faction = faction.name,
             accountToken = accountToken
         )
-        tokenRepository.saveToken(response.token)
+        sessionManager.login(response.token)
         return RegistrationResult(
             agent = response.agent.toDomain(),
             token = response.token

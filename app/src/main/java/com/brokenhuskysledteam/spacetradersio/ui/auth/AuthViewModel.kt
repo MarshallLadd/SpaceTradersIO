@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -17,22 +17,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// Drives the auth screen's two flows: new agent registration and token import.
-//
-// Registration delegates to RegisterAgentUseCase which calls the API (using the
-// caller-supplied AccountToken) and persists the returned AgentToken. The
-// AccountToken is passed through and immediately discarded — never stored.
-//
-// Token import uses a "store-and-go" approach — the AgentToken is saved
-// immediately and the dashboard's first API call validates it. If that call
-// returns 401/403, DashboardViewModel clears the token and sends the user back.
-//
-// Navigation signals are sent via a Channel (not SharedFlow) so each event is
-// consumed exactly once — no re-delivery on configuration changes.
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val registerAgentUseCase: RegisterAgentUseCase,
-    private val tokenRepository: TokenRepository
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -90,7 +78,7 @@ class AuthViewModel @Inject constructor(
             return
         }
         _uiState.update { it.copy(isImporting = true, error = null) }
-        tokenRepository.saveToken(state.agentToken.trim())
+        sessionManager.login(state.agentToken.trim())
         _uiState.update { it.copy(isImporting = false) }
         viewModelScope.launch {
             _navigationEvent.send(NavigationTarget.Dashboard)
