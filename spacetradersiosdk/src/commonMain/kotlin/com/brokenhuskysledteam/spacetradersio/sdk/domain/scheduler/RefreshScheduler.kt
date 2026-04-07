@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.concurrent.Volatile
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -22,8 +23,16 @@ class RefreshScheduler(
     private val _activeTimers = MutableStateFlow<Map<String, ScheduledRefresh>>(emptyMap())
     val activeTimers: StateFlow<Map<String, ScheduledRefresh>> = _activeTimers.asStateFlow()
 
+    @Volatile
     private var loopJob: Job? = null
 
+    /**
+     * Schedules a one-shot refresh to fire [action] 1 second after [expiresAt].
+     * If an entry with the same [id] already exists, it is replaced.
+     *
+     * The action is not retried on failure — if it throws, the entry is
+     * permanently removed. Callers must re-schedule if a retry is needed.
+     */
     fun schedule(id: String, expiresAt: Instant, action: suspend () -> Unit) {
         _activeTimers.update { it + (id to ScheduledRefresh(id, expiresAt, action)) }
         restartLoop()
@@ -62,6 +71,11 @@ class RefreshScheduler(
     }
 
     private fun restartLoop() {
+        // loopJob is @Volatile for visibility across threads. restartLoop() is not
+        // fully atomic (cancel + launch is a two-step op), but since _activeTimers
+        // mutations are protected by MutableStateFlow.update{}, the worst case of a
+        // concurrent restartLoop() call is a briefly-orphaned coroutine that will
+        // terminate on its next iteration when it finds _activeTimers empty.
         loopJob?.cancel()
         loopJob = scope.launch { runLoop() }
     }

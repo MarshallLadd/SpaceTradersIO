@@ -98,12 +98,13 @@ class RefreshSchedulerTest {
         scheduler.schedule("first", baseNow + 5.seconds) { results.add("first") }
         scheduler.schedule("second", baseNow + 10.seconds) { results.add("second") }
 
-        advanceTimeBy(7_000) // first fires at 5s + 1s = 6s elapsed
+        advanceTimeBy(5_000) // 5s elapsed — neither should have fired yet (both need +1s)
+        assertEquals(emptyList<String>(), results, "No timer should fire before expiry + 1s")
+
+        advanceTimeBy(2_000) // 7s elapsed — first fires at 6s, so it should have fired
         assertEquals(listOf("first"), results)
 
-        // After first fires, the loop restarts and waits 11s more for second
-        // (clock.now() is always baseNow so wait = expiresAt + 1s - baseNow = 11s)
-        advanceTimeBy(12_000) // 12s more virtual time covers the 11s wait for second
+        advanceTimeBy(12_000) // second fires at 11s from baseNow; 19s total virtual elapsed
         assertEquals(listOf("first", "second"), results)
     }
 
