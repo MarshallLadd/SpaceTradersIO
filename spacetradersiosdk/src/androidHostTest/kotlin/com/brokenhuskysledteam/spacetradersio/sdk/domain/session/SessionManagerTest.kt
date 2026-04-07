@@ -4,6 +4,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -12,7 +13,7 @@ class SessionManagerTest {
 
     @Test
     fun requireSessionThrowsWhenNoSession() {
-        val manager = SessionManager(FakeTokenRepository(storedToken = null))
+        val manager = SessionManagerImpl(FakeTokenRepository(storedToken = null))
         assertFailsWith<IllegalStateException> {
             manager.requireSession()
         }
@@ -21,7 +22,7 @@ class SessionManagerTest {
     @Test
     fun loginCreatesSessionAndSavesToken() {
         val tokenRepo = FakeTokenRepository(storedToken = null)
-        val manager = SessionManager(tokenRepo)
+        val manager = SessionManagerImpl(tokenRepo)
         manager.login("my-token")
         assertNotNull(manager.requireSession())
         assertEquals("my-token", tokenRepo.storedToken)
@@ -30,7 +31,7 @@ class SessionManagerTest {
     @Test
     fun logoutDestroysSessionAndClearsToken() {
         val tokenRepo = FakeTokenRepository(storedToken = "my-token")
-        val manager = SessionManager(tokenRepo)
+        val manager = SessionManagerImpl(tokenRepo)
         manager.login("my-token")
         manager.logout()
         assertNull(tokenRepo.storedToken)
@@ -38,15 +39,25 @@ class SessionManagerTest {
     }
 
     @Test
+    fun logoutCancelsSessionCoroutineScope() {
+        val manager = SessionManagerImpl(FakeTokenRepository(storedToken = null))
+        manager.login("token")
+        val session = manager.requireSession()
+        assertTrue(session.isActive)
+        manager.logout()
+        assertFalse(session.isActive)
+    }
+
+    @Test
     fun restoreIfAuthenticatedCreatesSessionWhenTokenExists() {
-        val manager = SessionManager(FakeTokenRepository(storedToken = "existing-token"))
+        val manager = SessionManagerImpl(FakeTokenRepository(storedToken = "existing-token"))
         manager.restoreIfAuthenticated()
         assertNotNull(manager.requireSession())
     }
 
     @Test
     fun restoreIfAuthenticatedDoesNothingWhenNoToken() {
-        val manager = SessionManager(FakeTokenRepository(storedToken = null))
+        val manager = SessionManagerImpl(FakeTokenRepository(storedToken = null))
         manager.restoreIfAuthenticated()
         assertFailsWith<IllegalStateException> { manager.requireSession() }
     }
@@ -54,7 +65,7 @@ class SessionManagerTest {
     @Test
     fun restoreIfAuthenticatedDoesNotRecreateExistingSession() {
         val tokenRepo = FakeTokenRepository(storedToken = "token")
-        val manager = SessionManager(tokenRepo)
+        val manager = SessionManagerImpl(tokenRepo)
         manager.restoreIfAuthenticated()
         val session1 = manager.requireSession()
         manager.restoreIfAuthenticated()
@@ -65,7 +76,7 @@ class SessionManagerTest {
     @Test
     fun loginAfterLogoutCreatesNewSession() {
         val tokenRepo = FakeTokenRepository(storedToken = null)
-        val manager = SessionManager(tokenRepo)
+        val manager = SessionManagerImpl(tokenRepo)
         manager.login("token-1")
         val session1 = manager.requireSession()
         manager.logout()
@@ -76,7 +87,7 @@ class SessionManagerTest {
 
     @Test
     fun sessionContainsAllStores() {
-        val manager = SessionManager(FakeTokenRepository(storedToken = null))
+        val manager = SessionManagerImpl(FakeTokenRepository(storedToken = null))
         manager.login("token")
         val session = manager.requireSession()
         assertNotNull(session.fleetStateStore)
