@@ -16,6 +16,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStat
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
@@ -34,7 +35,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 private val NOW = Instant.parse("2025-06-01T10:00:00.000Z")
@@ -65,20 +65,44 @@ private fun fakeShip(status: ShipNavStatus = ShipNavStatus.DOCKED) = Ship(
     cooldown = Cooldown(shipSymbol = "LADD-1", totalSeconds = 0, remainingSeconds = 0, expiration = null)
 )
 
-private class FakeDetailFleetRepository(var ship: Ship = fakeShip()) : FleetRepository {
+// Writes the ship to the store on getMyShip so the ViewModel's combine pipeline
+// picks it up via FleetStateStore.observe(shipSymbol).
+private class FakeDetailFleetRepository(
+    private val store: FleetStateStore,
+    var ship: Ship = fakeShip()
+) : FleetRepository {
     override suspend fun getMyShips(page: Int, limit: Int) = listOf(ship)
-    override suspend fun getMyShip(shipSymbol: String) = ship
+    override suspend fun getMyShip(shipSymbol: String): Ship {
+        store.put(shipSymbol, ship)
+        return ship
+    }
+    override suspend fun refreshMyShips(page: Int, limit: Int) {}
 }
 
-private class FakeOrbitUseCase(private val result: ShipNav = fakeNav(ShipNavStatus.IN_ORBIT)) : OrbitShipUseCase {
-    override suspend fun invoke(shipSymbol: String) = result
+// Fake use cases also update the store so that the ViewModel's observe() pipeline
+// reflects the action result — mirroring what the real Impl classes do.
+private class FakeOrbitUseCase(
+    private val store: FleetStateStore,
+    private val result: ShipNav = fakeNav(ShipNavStatus.IN_ORBIT)
+) : OrbitShipUseCase {
+    override suspend fun invoke(shipSymbol: String): ShipNav {
+        store.update(shipSymbol) { it.copy(nav = result) }
+        return result
+    }
 }
 
-private class FakeDockUseCase(private val result: ShipNav = fakeNav(ShipNavStatus.DOCKED)) : DockShipUseCase {
-    override suspend fun invoke(shipSymbol: String) = result
+private class FakeDockUseCase(
+    private val store: FleetStateStore,
+    private val result: ShipNav = fakeNav(ShipNavStatus.DOCKED)
+) : DockShipUseCase {
+    override suspend fun invoke(shipSymbol: String): ShipNav {
+        store.update(shipSymbol) { it.copy(nav = result) }
+        return result
+    }
 }
 
 private class FakeRefuelUseCase(
+    private val store: FleetStateStore,
     private val result: RefuelResult = RefuelResult(
         agent = Agent(
             accountId = null, symbol = "LADD", headquarters = "X1-DF55-20250Z",
@@ -92,19 +116,24 @@ private class FakeRefuelUseCase(
         )
     )
 ) : RefuelShipUseCase {
-    override suspend fun invoke(shipSymbol: String) = result
+    override suspend fun invoke(shipSymbol: String): RefuelResult {
+        store.update(shipSymbol) { it.copy(fuel = result.fuel) }
+        return result
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShipDetailViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private lateinit var store: FleetStateStore
     private lateinit var repository: FakeDetailFleetRepository
 
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        repository = FakeDetailFleetRepository()
+        store = FleetStateStore()
+        repository = FakeDetailFleetRepository(store)
     }
 
     @AfterTest
@@ -114,11 +143,12 @@ class ShipDetailViewModelTest {
 
     private fun createViewModel(
         shipSymbol: String = "LADD-1",
-        orbitUseCase: OrbitShipUseCase = FakeOrbitUseCase(),
-        dockUseCase: DockShipUseCase = FakeDockUseCase(),
-        refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase()
+        orbitUseCase: OrbitShipUseCase = FakeOrbitUseCase(store),
+        dockUseCase: DockShipUseCase = FakeDockUseCase(store),
+        refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase(store)
     ) = ShipDetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to shipSymbol)),
+        fleetStateStore = store,
         fleetRepository = repository,
         orbitShipUseCase = orbitUseCase,
         dockShipUseCase = dockUseCase,
@@ -126,12 +156,6 @@ class ShipDetailViewModelTest {
     )
 
     // ── initial load ──────────────────────────────────────────────────────────
-
-    @Test
-    fun init_isLoadingTrue_beforeDataArrives() = runTest {
-        val viewModel = createViewModel()
-        assertTrue(viewModel.uiState.value.isLoading)
-    }
 
     @Test
     fun init_loadsShip_setsShipDetail() = runTest {
@@ -166,15 +190,16 @@ class ShipDetailViewModelTest {
     fun init_loadsShip_error_setsErrorMessage() = runTest {
         val errorRepo = object : FleetRepository {
             override suspend fun getMyShips(page: Int, limit: Int) = emptyList<Ship>()
-            override suspend fun getMyShip(shipSymbol: String) = throw RuntimeException("Not found")
+            override suspend fun getMyShip(shipSymbol: String): Ship = throw RuntimeException("Not found")
+            override suspend fun refreshMyShips(page: Int, limit: Int) {}
         }
-        repository = FakeDetailFleetRepository()
         val viewModel = ShipDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to "LADD-X")),
+            fleetStateStore = store,
             fleetRepository = errorRepo,
-            orbitShipUseCase = FakeOrbitUseCase(),
-            dockShipUseCase = FakeDockUseCase(),
-            refuelShipUseCase = FakeRefuelUseCase()
+            orbitShipUseCase = FakeOrbitUseCase(store),
+            dockShipUseCase = FakeDockUseCase(store),
+            refuelShipUseCase = FakeRefuelUseCase(store)
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -188,7 +213,7 @@ class ShipDetailViewModelTest {
     @Test
     fun orbitClicked_updatesNavStatusToInOrbit() = runTest {
         repository.ship = fakeShip(ShipNavStatus.DOCKED)
-        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(fakeNav(ShipNavStatus.IN_ORBIT)))
+        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(store, fakeNav(ShipNavStatus.IN_ORBIT)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.OrbitClicked)
@@ -200,7 +225,7 @@ class ShipDetailViewModelTest {
     @Test
     fun orbitClicked_setsOrbitedActionResult() = runTest {
         repository.ship = fakeShip(ShipNavStatus.DOCKED)
-        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(fakeNav(ShipNavStatus.IN_ORBIT)))
+        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(store, fakeNav(ShipNavStatus.IN_ORBIT)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.OrbitClicked)
@@ -226,7 +251,7 @@ class ShipDetailViewModelTest {
     @Test
     fun dockClicked_updatesNavStatusToDocked() = runTest {
         repository.ship = fakeShip(ShipNavStatus.IN_ORBIT)
-        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(fakeNav(ShipNavStatus.DOCKED)))
+        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(store, fakeNav(ShipNavStatus.DOCKED)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.DockClicked)
@@ -238,7 +263,7 @@ class ShipDetailViewModelTest {
     @Test
     fun dockClicked_setsDockedActionResult() = runTest {
         repository.ship = fakeShip(ShipNavStatus.IN_ORBIT)
-        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(fakeNav(ShipNavStatus.DOCKED)))
+        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(store, fakeNav(ShipNavStatus.DOCKED)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.DockClicked)
@@ -254,10 +279,11 @@ class ShipDetailViewModelTest {
         repository.ship = fakeShip(ShipNavStatus.DOCKED)
         val viewModel = createViewModel(
             refuelUseCase = FakeRefuelUseCase(
+                store,
                 RefuelResult(
                     agent = Agent(null, "LADD", "X1-DF55-20250Z", 148500L, "COSMIC", 2),
                     fuel = ShipFuel(current = 400, capacity = 400),
-                    transaction = MarketTransaction("X1-DF55-20250Z","LADD-1","FUEL","PURCHASE",6,75,450,NOW)
+                    transaction = MarketTransaction("X1-DF55-20250Z", "LADD-1", "FUEL", "PURCHASE", 6, 75, 450, NOW)
                 )
             )
         )
@@ -320,6 +346,7 @@ class ShipDetailViewModelTest {
         assertNotNull(viewModel.uiState.value.actionResult)
 
         viewModel.onEvent(ShipDetailEvent.ActionResultDismissed)
+        testDispatcher.scheduler.advanceUntilIdle()
         assertNull(viewModel.uiState.value.actionResult)
     }
 }

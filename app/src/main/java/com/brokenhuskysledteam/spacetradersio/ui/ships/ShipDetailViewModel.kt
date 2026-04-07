@@ -45,7 +45,7 @@ class ShipDetailViewModel @Inject constructor(
             actionResult = local.actionResult,
             error = local.error
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ShipDetailUiState())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipDetailUiState())
 
     init {
         if (fleetStateStore.entities.value[shipSymbol] == null) {

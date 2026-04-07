@@ -36,7 +36,7 @@ class DashboardViewModel @Inject constructor(
         _error
     ) { agent, isLoading, error ->
         DashboardUiState(agent = agent, isLoading = isLoading, error = error)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, DashboardUiState())
 
     private val _navigationEvent = Channel<NavigationTarget>(Channel.BUFFERED)
     val navigationEvent = _navigationEvent.receiveAsFlow()

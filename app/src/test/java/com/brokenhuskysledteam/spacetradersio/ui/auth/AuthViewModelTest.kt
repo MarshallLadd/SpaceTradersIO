@@ -6,7 +6,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Agent
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymbol
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SpaceTradersSession
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegistrationResult
 import kotlinx.coroutines.Dispatchers
@@ -23,14 +24,14 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-// In-memory token store. Starts empty (logged-out) since auth tests need to
-// verify that registration and import write the token correctly.
-private class FakeTokenRepository : TokenRepository {
-    var savedToken: String? = null
-    override fun getToken(): String? = savedToken
-    override fun saveToken(token: String) { savedToken = token }
-    override fun clearToken() { savedToken = null }
-    override fun hasToken(): Boolean = savedToken != null
+// Captures login/logout calls; does not persist tokens.
+private class FakeSessionManager : SessionManager {
+    var loginToken: String? = null
+    var logoutCalled = false
+    override fun requireSession(): SpaceTradersSession = error("Not implemented in tests")
+    override fun login(token: String) { loginToken = token }
+    override fun logout() { logoutCalled = true }
+    override fun restoreIfAuthenticated() {}
 }
 
 // Configurable fake — set result for success or exception for failure.
@@ -58,16 +59,16 @@ private class FakeRegisterAgentUseCase : RegisterAgentUseCase {
 class AuthViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private lateinit var tokenRepository: FakeTokenRepository
+    private lateinit var sessionManager: FakeSessionManager
     private lateinit var registerUseCase: FakeRegisterAgentUseCase
     private lateinit var viewModel: AuthViewModel
 
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        tokenRepository = FakeTokenRepository()
+        sessionManager = FakeSessionManager()
         registerUseCase = FakeRegisterAgentUseCase()
-        viewModel = AuthViewModel(registerUseCase, tokenRepository)
+        viewModel = AuthViewModel(registerUseCase, sessionManager)
     }
 
     @AfterTest
@@ -135,7 +136,6 @@ class AuthViewModelTest {
     @Test
     fun registerClicked_blankAccountToken_setsError() {
         viewModel.onEvent(AuthEvent.CallsignChanged("CMD"))
-        // accountToken is blank by default; callsign validation passes first
         viewModel.onEvent(AuthEvent.RegisterClicked)
         assertEquals("Account token cannot be empty", viewModel.uiState.value.error)
         assertFalse(viewModel.uiState.value.isRegistering)
@@ -177,11 +177,10 @@ class AuthViewModelTest {
         assertEquals("my-account-token", registerUseCase.lastAccountToken)
     }
 
-    // Token persistence is the use case's responsibility, not the ViewModel's.
-    // FakeRegisterAgentUseCase never calls tokenRepository.saveToken(), so after a
-    // successful registration the repository must remain untouched — savedToken stays null.
+    // Token persistence during registration is the use case's responsibility, not the ViewModel's.
+    // FakeRegisterAgentUseCase never calls sessionManager.login(), so loginToken stays null.
     @Test
-    fun registerClicked_doesNotSaveAnyTokenToRepository() = runTest {
+    fun registerClicked_doesNotCallSessionManagerLogin() = runTest {
         registerUseCase.result = RegistrationResult(
             agent = Agent("acc-1", "CMD", "HQ", 100000L, "COSMIC", 1),
             token = "agent-tok"
@@ -195,7 +194,7 @@ class AuthViewModelTest {
             awaitItem()
         }
 
-        assertNull(tokenRepository.savedToken)
+        assertNull(sessionManager.loginToken)
     }
 
     @Test
@@ -219,7 +218,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun importClicked_success_savesTokenAndNavigates() = runTest {
+    fun importClicked_success_callsSessionLoginAndNavigates() = runTest {
         viewModel.onEvent(AuthEvent.AgentTokenChanged("my-token"))
 
         viewModel.navigationEvent.test {
@@ -228,7 +227,7 @@ class AuthViewModelTest {
             assertEquals(NavigationTarget.Dashboard, awaitItem())
         }
 
-        assertEquals("my-token", tokenRepository.savedToken)
+        assertEquals("my-token", sessionManager.loginToken)
         assertFalse(viewModel.uiState.value.isImporting)
     }
 
@@ -242,7 +241,7 @@ class AuthViewModelTest {
             awaitItem()
         }
 
-        assertEquals("my-token", tokenRepository.savedToken)
+        assertEquals("my-token", sessionManager.loginToken)
     }
 
     @Test

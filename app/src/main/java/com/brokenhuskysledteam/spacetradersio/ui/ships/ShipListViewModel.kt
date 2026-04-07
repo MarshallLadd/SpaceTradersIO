@@ -37,7 +37,7 @@ class ShipListViewModel @Inject constructor(
             isLoading = isLoading,
             error = error
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ShipListUiState())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipListUiState())
 
     private val _navigationEvent = Channel<NavigationTarget>(Channel.BUFFERED)
     val navigationEvent = _navigationEvent.receiveAsFlow()
