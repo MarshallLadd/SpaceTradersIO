@@ -1,6 +1,20 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipFuel
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNav
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNavRoute
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNavRouteWaypoint
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipRegistration
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlightMode
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.buildMockSpaceTradersClient
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
@@ -10,6 +24,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Instant
 
 private const val REFUEL_RESPONSE = """
 {
@@ -36,14 +51,36 @@ private const val REFUEL_RESPONSE = """
 }
 """
 
+private val testWaypoint = ShipNavRouteWaypoint("X1-DF55-20250Z", WaypointType.MOON, "X1-DF55", 0, 0)
+private val testRoute = ShipNavRoute(
+    origin = testWaypoint, destination = testWaypoint,
+    departureTime = Instant.parse("2025-06-01T10:00:00Z"),
+    arrivalTime = Instant.parse("2025-06-01T10:00:00Z")
+)
+private val dockedNav = ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.DOCKED, ShipNavFlightMode.CRUISE, testRoute)
+private fun testShip(symbol: String) = Ship(
+    symbol = symbol,
+    registration = ShipRegistration(ShipRole.COMMAND, "COSMIC"),
+    nav = dockedNav,
+    cargo = ShipCargo(0, 40),
+    fuel = ShipFuel(100, 400),   // starts with low fuel to verify update
+    frameName = "Shuttle Frame",
+    cooldown = Cooldown(symbol, 0, 0, null)
+)
+
 class RefuelShipUseCaseTest {
 
-    private fun buildUseCase() = RefuelShipUseCaseImpl(
+    private fun buildUseCase(
+        store: FleetStateStore = FleetStateStore(),
+        agentStore: AgentStateStore = AgentStateStore()
+    ) = RefuelShipUseCaseImpl(
         FleetApiImpl(buildMockSpaceTradersClient { respond(
             content = REFUEL_RESPONSE,
             status = HttpStatusCode.OK,
             headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-        )})
+        )}),
+        store,
+        agentStore
     )
 
     @Test
@@ -81,5 +118,20 @@ class RefuelShipUseCaseTest {
     fun invoke_returnsTransactionTradeSymbol() = runTest {
         val result = buildUseCase().invoke("LADD-1")
         assertEquals("FUEL", result.transaction.tradeSymbol)
+    }
+
+    @Test
+    fun invoke_updatesFuelInStoreWhenShipExists() = runTest {
+        val store = FleetStateStore()
+        store.put("LADD-1", testShip("LADD-1"))
+        buildUseCase(store).invoke("LADD-1")
+        assertEquals(400, store.entities.value["LADD-1"]?.fuel?.current)
+    }
+
+    @Test
+    fun invoke_updatesAgentStoreWithNewCredits() = runTest {
+        val agentStore = AgentStateStore()
+        buildUseCase(agentStore = agentStore).invoke("LADD-1")
+        assertEquals(148500L, agentStore.agent.value?.credits)
     }
 }
