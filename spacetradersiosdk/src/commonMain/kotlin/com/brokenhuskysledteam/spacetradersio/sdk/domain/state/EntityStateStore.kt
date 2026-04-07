@@ -18,7 +18,7 @@ interface EntityStateStore<K, T> {
     fun clear()
 }
 
-class EntityStateStoreImpl<K, T> : EntityStateStore<K, T> {
+open class EntityStateStoreImpl<K, T> : EntityStateStore<K, T> {
 
     private val _entities = MutableStateFlow<Map<K, T>>(emptyMap())
     override val entities: StateFlow<Map<K, T>> = _entities.asStateFlow()
