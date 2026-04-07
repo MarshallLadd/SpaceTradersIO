@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class EntityStateStoreTest {
 
-    private fun createStore() = EntityStateStore<String, String>()
+    private fun createStore() = EntityStateStoreImpl<String, String>()
 
     @Test
     fun initialStateIsEmpty() {
@@ -85,6 +85,15 @@ class EntityStateStoreTest {
     fun observeEmitsNullForMissingKey() = runTest {
         val store = createStore()
         val observed = store.observe("missing").first()
+        assertNull(observed)
+    }
+
+    @Test
+    fun observeEmitsNullAfterRemove() = runTest {
+        val store = createStore()
+        store.put("key1", "value1")
+        store.remove("key1")
+        val observed = store.observe("key1").first()
         assertNull(observed)
     }
 }
