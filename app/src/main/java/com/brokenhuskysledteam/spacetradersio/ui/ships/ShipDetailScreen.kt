@@ -193,7 +193,7 @@ private fun NavigationCard(ship: ShipDetail) {
             ship.departureTime != null
         ) {
             Spacer(modifier = Modifier.height(4.dp))
-            ShipDetailDataRow("ORIGIN", ship.waypointSymbol)
+            ShipDetailDataRow("ORIGIN", "${ship.originSymbol} (${ship.originType.name})")
             Spacer(modifier = Modifier.height(4.dp))
             ShipDetailDataRow("DESTINATION", "${ship.destinationSymbol} (${ship.destinationType.name})")
             Spacer(modifier = Modifier.height(8.dp))

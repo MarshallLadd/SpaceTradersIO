@@ -187,6 +187,43 @@ class ShipDetailViewModelTest {
     }
 
     @Test
+    fun init_mapsOriginToDetail() = runTest {
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val ship = assertNotNull(viewModel.uiState.value.ship)
+        assertEquals("X1-DF55-20250Z", ship.originSymbol)
+        assertEquals(WaypointType.MOON, ship.originType)
+    }
+
+    @Test
+    fun init_originSymbolComesFromRoute_notWaypointSymbol() = runTest {
+        repository.ship = fakeShip().let { ship ->
+            ship.copy(
+                nav = ship.nav.copy(
+                    waypointSymbol = "CURRENT-LOCATION",
+                    route = ship.nav.route.copy(
+                        origin = ShipNavRouteWaypoint(
+                            symbol = "DEPARTURE-POINT",
+                            type = WaypointType.ORBITAL_STATION,
+                            systemSymbol = "X1-DF55",
+                            x = 10,
+                            y = 20
+                        )
+                    )
+                )
+            )
+        }
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val ship = assertNotNull(viewModel.uiState.value.ship)
+        assertEquals("CURRENT-LOCATION", ship.waypointSymbol)
+        assertEquals("DEPARTURE-POINT", ship.originSymbol)
+        assertEquals(WaypointType.ORBITAL_STATION, ship.originType)
+    }
+
+    @Test
     fun init_loadsShip_error_setsErrorMessage() = runTest {
         val errorRepo = object : FleetRepository {
             override suspend fun getMyShips(page: Int, limit: Int) = emptyList<Ship>()

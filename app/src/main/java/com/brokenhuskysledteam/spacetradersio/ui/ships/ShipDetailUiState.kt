@@ -24,7 +24,9 @@ data class ShipDetail(
     val flightMode: ShipNavFlightMode,
     val systemSymbol: String,
     val waypointSymbol: String,
-    // Route fields — non-null when ship is IN_TRANSIT
+    // Route fields
+    val originSymbol: String,
+    val originType: WaypointType,
     val destinationSymbol: String,
     val destinationType: WaypointType,
     val arrivalTime: Instant?,
