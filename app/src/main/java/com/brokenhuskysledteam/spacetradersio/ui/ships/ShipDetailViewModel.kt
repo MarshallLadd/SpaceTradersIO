@@ -129,6 +129,8 @@ private fun Ship.toDetail(): ShipDetail {
         flightMode = nav.flightMode,
         systemSymbol = nav.systemSymbol,
         waypointSymbol = nav.waypointSymbol,
+        originSymbol = nav.route.origin.symbol,
+        originType = nav.route.origin.type,
         destinationSymbol = nav.route.destination.symbol,
         destinationType = nav.route.destination.type,
         arrivalTime = if (inTransit) nav.route.arrivalTime else null,

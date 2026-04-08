@@ -129,12 +129,17 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 
 - `gradlew` must have the executable bit set in git (`git update-index --chmod=+x gradlew`). Windows does not preserve Unix permissions — omitting this causes CI to fail with exit code 126.
 - The repo root IS the KMP project root. Git was initialized inside `KMP/`, so there is no `KMP/` subdirectory on CI runners or in the repo. Do not use `working-directory: KMP` in GitHub Actions workflows.
-- `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`.
+- `compileKotlinAndroid` is ambiguous in Gradle — always use `compileDebugKotlinAndroid`. To verify app compilation, use `:app:compileDebugSources` (not `:app:compileDebugKotlinAndroid` which does not exist as a task).
 - SDK package namespace is `com.brokenhuskysledteam.spacetradersio.sdk.*` — all source and test files use this consistently.
 - In non-KMP JVM modules (like `:app`), use `kotlin-test-junit` (not plain `kotlin-test`) to get `@BeforeTest`/`@AfterTest` annotations resolved. The plain artifact lacks the JVM-specific bridge.
 - Material 3 `Shapes` slots require `CornerBasedShape` — use `RoundedCornerShape(0.dp)` for sharp corners, not `RectangleShape` (which is a generic `Shape` and won't compile).
 - `assertIs<T>()` returns `T`, not `Unit`. Using it as an expression body (`fun test() = assertIs<Foo>(x)`) makes JUnit reject the test method as non-void. Use block bodies: `fun test() { assertIs<Foo>(x) }`.
 - **Windows worktree removal may fail with "Filename too long"** — deep Gradle build output hits MAX_PATH (260 chars). Delete the directory manually then run `git worktree prune` to clean git's metadata.
+- **`@Volatile` in `commonMain` requires `import kotlin.concurrent.Volatile`** — the annotation is not auto-imported. `synchronized {}` is JVM-only and unavailable in `commonMain`; use `@Volatile` + documented threading assumptions instead.
+- **`EntityStateStore` has no `observeAll()`** — use `.entities: StateFlow<Map<K, T>>` directly when combining in a ViewModel.
+- **`ProcessLifecycleOwner` requires `androidx-lifecycle-process`** — add `implementation(libs.androidx.lifecycle.process)` to `app/build.gradle.kts` and the corresponding entry to `gradle/libs.versions.toml` (uses the same `lifecycleRuntimeKtx` version ref).
+- **`stateIn(WhileSubscribed)` + `StandardTestDispatcher`**: Without an active subscriber the upstream `combine` is never collected and `.value` stays at the initial value. Use `SharingStarted.Eagerly` in ViewModels if tests read `.value` directly. Even with `Eagerly`, synchronous `MutableStateFlow` changes (e.g. `_error.value = null`) still require `advanceUntilIdle()` before they propagate through `combine` to `uiState.value`.
+- **`RefreshScheduler` test fixtures: always use far-future arrival times** — transit ships in tests must use `arrivalTime = "2099-01-01T01:00:00.000Z"` (not a past date). A past `expiresAt` makes `delay(0)` skip entirely and the action re-schedules itself immediately → infinite loop → OOM. Use `backgroundScope` (not `this`) for `RefreshScheduler(backgroundScope)` in `runTest` to avoid `UncompletedCoroutinesError`.
 
 ## SpaceTraders API
 
