@@ -48,8 +48,11 @@ All commands run from the `KMP/` directory. On Windows use `gradlew.bat` instead
 # Run app unit tests (ViewModels, etc.)
 ./gradlew :app:testDebugUnitTest
 
-# Run a single test class
-./gradlew :spacetradersiosdk:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetradersio.sdk.MyTest"
+# Run a single SDK test class
+./gradlew :spacetradersiosdk:testAndroidHostTest --tests "com.brokenhuskysledteam.spacetradersio.sdk.MyTest"
+
+# Run a single app test class
+./gradlew :app:testDebugUnitTest --tests "com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailViewModelTest"
 ```
 
 iOS framework is built via `./gradlew :spacetradersiosdk:assembleSpacetradersiosdkKitReleaseXCFramework`. There is no iOS app in this repo yet — the SDK produces an xcframework (`spacetradersiosdkKit`) for consumption by a native Swift/Xcode project.
@@ -140,6 +143,8 @@ Tests live in `spacetradersiosdk/src/androidHostTest/` (JVM unit tests) and `spa
 - **`ProcessLifecycleOwner` requires `androidx-lifecycle-process`** — add `implementation(libs.androidx.lifecycle.process)` to `app/build.gradle.kts` and the corresponding entry to `gradle/libs.versions.toml` (uses the same `lifecycleRuntimeKtx` version ref).
 - **`stateIn(WhileSubscribed)` + `StandardTestDispatcher`**: Without an active subscriber the upstream `combine` is never collected and `.value` stays at the initial value. Use `SharingStarted.Eagerly` in ViewModels if tests read `.value` directly. Even with `Eagerly`, synchronous `MutableStateFlow` changes (e.g. `_error.value = null`) still require `advanceUntilIdle()` before they propagate through `combine` to `uiState.value`.
 - **`RefreshScheduler` test fixtures: always use far-future arrival times** — transit ships in tests must use `arrivalTime = "2099-01-01T01:00:00.000Z"` (not a past date). A past `expiresAt` makes `delay(0)` skip entirely and the action re-schedules itself immediately → infinite loop → OOM. Use `backgroundScope` (not `this`) for `RefreshScheduler(backgroundScope)` in `runTest` to avoid `UncompletedCoroutinesError`.
+- **Default lambdas with multiple parameters**: `= {}` infers `() -> Unit` — for a `(A, B, C) -> Unit` default parameter, use `= { _, _, _ -> }` instead.
+- **Sealed `when` exhaustiveness + composable navigation**: Adding a UI navigation event to a ViewModel's sealed event interface still requires a branch in the VM's `when` even if the VM doesn't handle it — use `is MyEvent.NavigationEvent -> Unit`.
 
 ## SpaceTraders API
 
