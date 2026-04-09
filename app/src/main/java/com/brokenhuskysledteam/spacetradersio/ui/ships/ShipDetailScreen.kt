@@ -39,12 +39,14 @@ import kotlin.time.ExperimentalTime
 // Stateful wrapper — wires the Hilt ViewModel.
 @Composable
 fun ShipDetailScreen(
+    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     ShipDetailScreenContent(
         uiState = uiState,
-        onEvent = viewModel::onEvent
+        onEvent = viewModel::onEvent,
+        onNavigateToSystemMap = onNavigateToSystemMap
     )
 }
 
@@ -52,7 +54,8 @@ fun ShipDetailScreen(
 @Composable
 fun ShipDetailScreenContent(
     uiState: ShipDetailUiState,
-    onEvent: (ShipDetailEvent) -> Unit
+    onEvent: (ShipDetailEvent) -> Unit,
+    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> }
 ) {
     Box(
         modifier = Modifier
@@ -107,7 +110,7 @@ fun ShipDetailScreenContent(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Navigation card
-                    NavigationCard(ship = ship)
+                    NavigationCard(ship = ship, onNavigateToSystemMap = onNavigateToSystemMap)
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Fuel card
@@ -180,7 +183,10 @@ fun ShipDetailScreenContent(
 
 @OptIn(ExperimentalTime::class)
 @Composable
-private fun NavigationCard(ship: ShipDetail) {
+private fun NavigationCard(
+    ship: ShipDetail,
+    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit
+) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
         Spacer(modifier = Modifier.height(4.dp))
@@ -197,10 +203,26 @@ private fun NavigationCard(ship: ShipDetail) {
             Spacer(modifier = Modifier.height(4.dp))
             ShipDetailDataRow("DESTINATION", "${ship.destinationSymbol} (${ship.destinationType.name})")
             Spacer(modifier = Modifier.height(8.dp))
+            TerminalButton(
+                text = "View System",
+                onClick = {
+                    onNavigateToSystemMap(ship.systemSymbol, ship.waypointSymbol, ship.symbol)
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             DetailTransitProgress(ship = ship)
         } else {
             Spacer(modifier = Modifier.height(4.dp))
             ShipDetailDataRow("LOCATION", ship.waypointSymbol)
+            Spacer(modifier = Modifier.height(8.dp))
+            TerminalButton(
+                text = "View System",
+                onClick = {
+                    onNavigateToSystemMap(ship.systemSymbol, ship.waypointSymbol, ship.symbol)
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
