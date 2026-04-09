@@ -2,6 +2,8 @@ package com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.client.SpaceTradersClient
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ApiResponse
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateRequestDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.OrbitDockResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.RefuelResponseDto
@@ -21,6 +23,7 @@ interface FleetApi {
     suspend fun orbitShip(shipSymbol: String): ShipNavDto
     suspend fun dockShip(shipSymbol: String): ShipNavDto
     suspend fun refuelShip(shipSymbol: String): RefuelResponseDto
+    suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto
 }
 
 class FleetApiImpl(private val client: SpaceTradersClient) : FleetApi {
@@ -53,4 +56,11 @@ class FleetApiImpl(private val client: SpaceTradersClient) : FleetApi {
     override suspend fun refuelShip(shipSymbol: String): RefuelResponseDto =
         client.authenticated.post("my/ships/$shipSymbol/refuel") { setBody("{}") }
             .body<ApiResponse<RefuelResponseDto>>().data
+
+    // POST /my/ships/{shipSymbol}/navigate — sends the ship to the given waypoint.
+    // Ship must be in orbit. Returns updated nav and fuel state.
+    override suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto =
+        client.authenticated.post("my/ships/$shipSymbol/navigate") {
+            setBody(NavigateRequestDto(waypointSymbol))
+        }.body<ApiResponse<NavigateResponseDto>>().data
 }

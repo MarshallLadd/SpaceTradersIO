@@ -17,3 +17,10 @@ object ShipListRoute
 
 @Serializable
 data class ShipDetailRoute(val shipSymbol: String)
+
+@Serializable
+data class SystemMapRoute(
+    val systemSymbol: String,
+    val focusWaypointSymbol: String? = null,
+    val shipSymbol: String? = null
+)

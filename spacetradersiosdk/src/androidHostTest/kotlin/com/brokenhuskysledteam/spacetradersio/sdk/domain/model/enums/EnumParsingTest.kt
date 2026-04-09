@@ -2,6 +2,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
 
 class EnumParsingTest {
 
@@ -80,5 +81,27 @@ class EnumParsingTest {
     @Test
     fun waypointType_unknownValue_fallsBackToPlanet() {
         assertEquals(WaypointType.PLANET, WaypointType.fromString("UNKNOWN_TYPE"))
+    }
+
+    // ── WaypointTraitSymbol ─────────────────────────────────────────────
+
+    @Test
+    fun waypointTraitSymbol_knownValue_returnsCorrectEntry() {
+        assertEquals(WaypointTraitSymbol.MARKETPLACE, WaypointTraitSymbol.fromString("MARKETPLACE"))
+    }
+
+    @Test
+    fun waypointTraitSymbol_shipyard_returnsCorrectEntry() {
+        assertEquals(WaypointTraitSymbol.SHIPYARD, WaypointTraitSymbol.fromString("SHIPYARD"))
+    }
+
+    @Test
+    fun waypointTraitSymbol_unknownValue_fallsBackToUncharted() {
+        assertEquals(WaypointTraitSymbol.UNCHARTED, WaypointTraitSymbol.fromString("FUTURE_TRAIT"))
+    }
+
+    @Test
+    fun waypointTraitSymbol_caseSensitive_lowercaseFallsBack() {
+        assertEquals(WaypointTraitSymbol.UNCHARTED, WaypointTraitSymbol.fromString("marketplace"))
     }
 }

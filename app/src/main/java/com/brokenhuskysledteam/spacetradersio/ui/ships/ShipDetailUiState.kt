@@ -55,4 +55,9 @@ sealed interface ShipDetailEvent {
     data object RefuelClicked : ShipDetailEvent
     data object ActionResultDismissed : ShipDetailEvent
     data object RetryClicked : ShipDetailEvent
+    data class ViewSystemClicked(
+        val systemSymbol: String,
+        val waypointSymbol: String,
+        val shipSymbol: String
+    ) : ShipDetailEvent
 }

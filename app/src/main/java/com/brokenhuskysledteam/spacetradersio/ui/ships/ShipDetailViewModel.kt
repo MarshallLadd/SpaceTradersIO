@@ -81,6 +81,10 @@ class ShipDetailViewModel @Inject constructor(
             is ShipDetailEvent.ActionResultDismissed -> _localState.update { it.copy(actionResult = null) }
 
             is ShipDetailEvent.RetryClicked -> loadShip()
+
+            // Navigation is handled by the composable via the onNavigateToSystemMap callback;
+            // the ViewModel does not need to act on this event.
+            is ShipDetailEvent.ViewSystemClicked -> Unit
         }
     }
 

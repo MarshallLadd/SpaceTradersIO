@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.data.repository
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CooldownDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.OrbitDockResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.RefuelResponseDto
@@ -96,6 +97,9 @@ private class FakeFleetApi(
             pricePerUnit = 75, totalPrice = 450, timestamp = "2025-06-01T10:00:00.000Z"
         )
     )
+
+    override suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto =
+        NavigateResponseDto(nav = orbitNav, fuel = ShipFuelDto(current = 400, capacity = 400))
 }
 
 class FleetRepositoryImplTest {

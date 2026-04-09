@@ -7,7 +7,14 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
@@ -83,6 +90,13 @@ object SdkModule {
     fun provideFleetApi(client: SpaceTradersClient): FleetApi =
         FleetApiImpl(client)
 
+    // --- Systems API ---
+
+    @Provides
+    @Singleton
+    fun provideSystemsApi(client: SpaceTradersClient): SystemsApi =
+        SystemsApiImpl(client)
+
     // --- Session-Scoped State (Unscoped — fetches from current session on each injection) ---
 
     @Provides
@@ -97,6 +111,10 @@ object SdkModule {
     fun provideRefreshScheduler(sm: SessionManager): RefreshScheduler =
         sm.requireSession().refreshScheduler
 
+    @Provides
+    fun provideWaypointStateStore(sm: SessionManager): WaypointStateStore =
+        sm.requireSession().waypointStateStore
+
     // --- Repositories ---
 
     @Provides
@@ -105,6 +123,12 @@ object SdkModule {
         fleetStateStore: FleetStateStore,
         refreshScheduler: RefreshScheduler
     ): FleetRepository = FleetRepositoryImpl(fleetApi, fleetStateStore, refreshScheduler)
+
+    @Provides
+    fun provideSystemRepository(
+        systemsApi: SystemsApi,
+        waypointStateStore: WaypointStateStore
+    ): SystemRepository = SystemRepositoryImpl(systemsApi, waypointStateStore)
 
     // --- Use Cases ---
 
@@ -144,4 +168,11 @@ object SdkModule {
         fleetStateStore: FleetStateStore,
         agentStateStore: AgentStateStore
     ): RefuelShipUseCase = RefuelShipUseCaseImpl(fleetApi, fleetStateStore, agentStateStore)
+
+    @Provides
+    fun provideNavigateShipUseCase(
+        fleetApi: FleetApi,
+        fleetStateStore: FleetStateStore,
+        orbitShipUseCase: OrbitShipUseCase
+    ): NavigateShipUseCase = NavigateShipUseCaseImpl(fleetApi, fleetStateStore, orbitShipUseCase)
 }

@@ -10,6 +10,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
+import com.brokenhuskysledteam.spacetradersio.ui.systemmap.SystemMapScreen
 
 // Top-level navigation graph for the app. Checks TokenRepository at composition
 // time to decide whether to start on the auth screen or the dashboard.
@@ -60,7 +61,17 @@ fun SpaceTradersNavHost(
         }
 
         composable<ShipDetailRoute> {
-            ShipDetailScreen()
+            ShipDetailScreen(
+                onNavigateToSystemMap = { systemSymbol, waypointSymbol, shipSymbol ->
+                    navController.navigate(
+                        SystemMapRoute(systemSymbol, waypointSymbol, shipSymbol)
+                    )
+                }
+            )
+        }
+
+        composable<SystemMapRoute> {
+            SystemMapScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }

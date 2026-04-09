@@ -9,4 +9,9 @@ sealed interface NavigationTarget {
     data object Auth : NavigationTarget
     data object ShipList : NavigationTarget
     data class ShipDetail(val shipSymbol: String) : NavigationTarget
+    data class SystemMap(
+        val systemSymbol: String,
+        val focusWaypointSymbol: String? = null,
+        val shipSymbol: String? = null
+    ) : NavigationTarget
 }
