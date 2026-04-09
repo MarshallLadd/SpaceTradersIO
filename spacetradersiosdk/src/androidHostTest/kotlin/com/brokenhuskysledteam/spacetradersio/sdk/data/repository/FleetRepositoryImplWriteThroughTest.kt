@@ -2,6 +2,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.data.repository
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CooldownDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MarketTransactionDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MetaDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
@@ -85,6 +86,9 @@ private class FakeWriteThroughFleetApi(
         fuel = ShipFuelDto(current = 400, capacity = 400),
         transaction = MarketTransactionDto("X1-DF55-20250Z", shipSymbol, "FUEL", "PURCHASE", 6, 75, 450, "2025-06-01T10:00:00.000Z")
     )
+
+    override suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto =
+        NavigateResponseDto(nav = singleShip.nav, fuel = ShipFuelDto(current = 400, capacity = 400))
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
