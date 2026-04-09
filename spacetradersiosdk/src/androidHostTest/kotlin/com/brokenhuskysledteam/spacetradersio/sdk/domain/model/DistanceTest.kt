@@ -2,6 +2,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.domain.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DistanceTest {
 
@@ -35,5 +36,12 @@ class DistanceTest {
         val d1 = euclideanDistance(1, 2, 4, 6)
         val d2 = euclideanDistance(4, 6, 1, 2)
         assertEquals(d1, d2)
+    }
+
+    @Test
+    fun extremeCoordinates_noOverflow() {
+        // Without the fix, Int subtraction overflows before casting to Double
+        val result = euclideanDistance(Int.MIN_VALUE, 0, Int.MAX_VALUE, 0)
+        assertTrue(result > 0.0, "Distance should be positive, got $result")
     }
 }
