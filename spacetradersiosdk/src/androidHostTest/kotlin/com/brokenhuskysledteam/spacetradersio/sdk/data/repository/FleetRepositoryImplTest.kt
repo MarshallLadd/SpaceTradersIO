@@ -16,6 +16,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavRouteDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavRouteWaypointDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipRegistrationDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipFuel
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNav
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNavRoute
@@ -171,5 +173,38 @@ class FleetRepositoryImplTest {
         repo.clearAll()
         val result = repo.observeShips().first()
         assertEquals(emptyList(), result)
+    }
+
+    @Test
+    fun updateShipCargo_changesCargoFields() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShip("LADD-1")
+        repo.updateShipCargo("LADD-1", ShipCargo(units = 20, capacity = 40))
+        val result = repo.observeShip("LADD-1").first()
+        assertEquals(20, result?.cargo?.units)
+        assertEquals(ShipNavStatus.DOCKED, result?.nav?.status) // nav unchanged
+    }
+
+    @Test
+    fun updateShipCooldown_setsCooldownFields() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShip("LADD-1")
+        val expiry = Instant.parse("2099-01-01T01:00:00Z")
+        repo.updateShipCooldown("LADD-1", Cooldown("LADD-1", 60, 30, expiry))
+        val result = repo.observeShip("LADD-1").first()
+        assertEquals(60, result?.cooldown?.totalSeconds)
+        assertEquals(expiry, result?.cooldown?.expiration)
+    }
+
+    @Test
+    fun updateShipCooldown_nullExpiration_clearsExpiry() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShip("LADD-1")
+        repo.updateShipCooldown("LADD-1", Cooldown("LADD-1", 0, 0, null))
+        val result = repo.observeShip("LADD-1").first()
+        assertNull(result?.cooldown?.expiration)
     }
 }
