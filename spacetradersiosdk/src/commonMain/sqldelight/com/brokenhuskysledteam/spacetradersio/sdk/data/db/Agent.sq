@@ -1,0 +1,21 @@
+CREATE TABLE agent (
+    symbol TEXT NOT NULL PRIMARY KEY,
+    account_id TEXT,
+    headquarters TEXT NOT NULL,
+    credits INTEGER NOT NULL,
+    starting_faction TEXT NOT NULL,
+    ship_count INTEGER NOT NULL
+);
+
+selectAgent:
+SELECT * FROM agent LIMIT 1;
+
+upsertAgent:
+INSERT OR REPLACE INTO agent (symbol, account_id, headquarters, credits, starting_faction, ship_count)
+VALUES (?, ?, ?, ?, ?, ?);
+
+updateCredits:
+UPDATE agent SET credits = ? WHERE symbol = ?;
+
+deleteAll:
+DELETE FROM agent;
