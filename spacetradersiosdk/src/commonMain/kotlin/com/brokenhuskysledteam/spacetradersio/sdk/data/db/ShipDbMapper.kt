@@ -18,25 +18,25 @@ import kotlin.time.Instant
 fun DbShip.toDomain(): Ship = Ship(
     symbol = symbol,
     registration = ShipRegistration(
-        role = ShipRole.valueOf(reg_role),
+        role = ShipRole.fromString(reg_role),
         factionSymbol = reg_faction_symbol
     ),
     nav = ShipNav(
         systemSymbol = nav_system_symbol,
         waypointSymbol = nav_waypoint_symbol,
-        status = ShipNavStatus.valueOf(nav_status),
-        flightMode = ShipNavFlightMode.valueOf(nav_flight_mode),
+        status = ShipNavStatus.fromString(nav_status),
+        flightMode = ShipNavFlightMode.fromString(nav_flight_mode),
         route = ShipNavRoute(
             origin = ShipNavRouteWaypoint(
                 symbol = route_origin_symbol,
-                type = WaypointType.valueOf(route_origin_type),
+                type = WaypointType.fromString(route_origin_type),
                 systemSymbol = route_origin_system,
                 x = route_origin_x.toInt(),
                 y = route_origin_y.toInt()
             ),
             destination = ShipNavRouteWaypoint(
                 symbol = route_dest_symbol,
-                type = WaypointType.valueOf(route_dest_type),
+                type = WaypointType.fromString(route_dest_type),
                 systemSymbol = route_dest_system,
                 x = route_dest_x.toInt(),
                 y = route_dest_y.toInt()

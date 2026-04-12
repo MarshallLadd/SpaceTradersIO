@@ -119,6 +119,7 @@ class ShipDbMapperTest {
         db.shipQueries.updateShipCargo(cargo_units = 20, cargo_capacity = 40, symbol = "LADD-1")
         val result = db.shipQueries.selectShipBySymbol("LADD-1").executeAsOne().toDomain()
         assertEquals(20, result.cargo.units)
+        assertEquals(ShipNavStatus.DOCKED, result.nav.status) // nav unchanged
     }
 
     @Test
@@ -134,5 +135,6 @@ class ShipDbMapperTest {
         val result = db.shipQueries.selectShipBySymbol("LADD-1").executeAsOne().toDomain()
         assertEquals(0, result.cooldown.totalSeconds)
         assertNull(result.cooldown.expiration)
+        assertEquals(350, result.fuel.current) // fuel unchanged
     }
 }
