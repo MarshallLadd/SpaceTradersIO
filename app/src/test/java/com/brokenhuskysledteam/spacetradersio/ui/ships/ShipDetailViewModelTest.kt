@@ -16,12 +16,15 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStat
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -65,44 +68,65 @@ private fun fakeShip(status: ShipNavStatus = ShipNavStatus.DOCKED) = Ship(
     cooldown = Cooldown(shipSymbol = "LADD-1", totalSeconds = 0, remainingSeconds = 0, expiration = null)
 )
 
-// Writes the ship to the store on getMyShip so the ViewModel's combine pipeline
-// picks it up via FleetStateStore.observe(shipSymbol).
+// In-memory FleetRepository backed by MutableStateFlow.
+// refreshMyShip() stores the configured ship so the ViewModel's combine pipeline
+// picks it up via observeShip(). Fake use cases call updateShipNav/Fuel to reflect
+// action side-effects, just like the real impls do.
 private class FakeDetailFleetRepository(
-    private val store: FleetStateStore,
-    var ship: Ship = fakeShip()
+    var ship: Ship = fakeShip(),
+    var exception: Exception? = null
 ) : FleetRepository {
-    override suspend fun getMyShips(page: Int, limit: Int) = listOf(ship)
-    override suspend fun getMyShip(shipSymbol: String): Ship {
-        store.put(shipSymbol, ship)
-        return ship
-    }
+    private val _ships = MutableStateFlow<Map<String, Ship>>(emptyMap())
+
+    override fun observeShips(): Flow<List<Ship>> = _ships.map { it.values.toList() }
+    override fun observeShip(shipSymbol: String): Flow<Ship?> = _ships.map { it[shipSymbol] }
+
     override suspend fun refreshMyShips(page: Int, limit: Int) {}
+    override suspend fun refreshMyShip(shipSymbol: String) {
+        exception?.let { throw it }
+        _ships.update { it + (shipSymbol to ship) }
+    }
+
+    override suspend fun saveShip(s: Ship) { _ships.update { it + (s.symbol to s) } }
+    override suspend fun updateShipNav(shipSymbol: String, nav: ShipNav) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(nav = nav)) } ?: m }
+    }
+    override suspend fun updateShipFuel(shipSymbol: String, fuel: ShipFuel) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(fuel = fuel)) } ?: m }
+    }
+    override suspend fun updateShipCargo(shipSymbol: String, cargo: ShipCargo) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(cargo = cargo)) } ?: m }
+    }
+    override suspend fun updateShipCooldown(shipSymbol: String, cooldown: Cooldown) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(cooldown = cooldown)) } ?: m }
+    }
+    override suspend fun clearAll() { _ships.value = emptyMap() }
 }
 
-// Fake use cases also update the store so that the ViewModel's observe() pipeline
-// reflects the action result — mirroring what the real Impl classes do.
+// Fake use cases call the repo's update methods to reflect action side-effects,
+// mirroring what the real Impl classes do.
 private class FakeOrbitUseCase(
-    private val store: FleetStateStore,
+    private val repo: FakeDetailFleetRepository,
     private val result: ShipNav = fakeNav(ShipNavStatus.IN_ORBIT)
 ) : OrbitShipUseCase {
     override suspend fun invoke(shipSymbol: String): ShipNav {
-        store.update(shipSymbol) { it.copy(nav = result) }
+        repo.updateShipNav(shipSymbol, result)
         return result
     }
 }
 
 private class FakeDockUseCase(
-    private val store: FleetStateStore,
+    private val repo: FakeDetailFleetRepository,
     private val result: ShipNav = fakeNav(ShipNavStatus.DOCKED)
 ) : DockShipUseCase {
     override suspend fun invoke(shipSymbol: String): ShipNav {
-        store.update(shipSymbol) { it.copy(nav = result) }
+        repo.updateShipNav(shipSymbol, result)
         return result
     }
 }
 
 private class FakeRefuelUseCase(
-    private val store: FleetStateStore,
+    private val repo: FakeDetailFleetRepository,
     private val result: RefuelResult = RefuelResult(
         agent = Agent(
             accountId = null, symbol = "LADD", headquarters = "X1-DF55-20250Z",
@@ -117,7 +141,7 @@ private class FakeRefuelUseCase(
     )
 ) : RefuelShipUseCase {
     override suspend fun invoke(shipSymbol: String): RefuelResult {
-        store.update(shipSymbol) { it.copy(fuel = result.fuel) }
+        repo.updateShipFuel(shipSymbol, result.fuel)
         return result
     }
 }
@@ -126,14 +150,12 @@ private class FakeRefuelUseCase(
 class ShipDetailViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private lateinit var store: FleetStateStore
     private lateinit var repository: FakeDetailFleetRepository
 
     @BeforeTest
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        store = FleetStateStore()
-        repository = FakeDetailFleetRepository(store)
+        repository = FakeDetailFleetRepository()
     }
 
     @AfterTest
@@ -143,12 +165,11 @@ class ShipDetailViewModelTest {
 
     private fun createViewModel(
         shipSymbol: String = "LADD-1",
-        orbitUseCase: OrbitShipUseCase = FakeOrbitUseCase(store),
-        dockUseCase: DockShipUseCase = FakeDockUseCase(store),
-        refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase(store)
+        orbitUseCase: OrbitShipUseCase = FakeOrbitUseCase(repository),
+        dockUseCase: DockShipUseCase = FakeDockUseCase(repository),
+        refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase(repository)
     ) = ShipDetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to shipSymbol)),
-        fleetStateStore = store,
         fleetRepository = repository,
         orbitShipUseCase = orbitUseCase,
         dockShipUseCase = dockUseCase,
@@ -225,18 +246,13 @@ class ShipDetailViewModelTest {
 
     @Test
     fun init_loadsShip_error_setsErrorMessage() = runTest {
-        val errorRepo = object : FleetRepository {
-            override suspend fun getMyShips(page: Int, limit: Int) = emptyList<Ship>()
-            override suspend fun getMyShip(shipSymbol: String): Ship = throw RuntimeException("Not found")
-            override suspend fun refreshMyShips(page: Int, limit: Int) {}
-        }
+        val errorRepo = FakeDetailFleetRepository(exception = RuntimeException("Not found"))
         val viewModel = ShipDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to "LADD-X")),
-            fleetStateStore = store,
             fleetRepository = errorRepo,
-            orbitShipUseCase = FakeOrbitUseCase(store),
-            dockShipUseCase = FakeDockUseCase(store),
-            refuelShipUseCase = FakeRefuelUseCase(store)
+            orbitShipUseCase = FakeOrbitUseCase(errorRepo),
+            dockShipUseCase = FakeDockUseCase(errorRepo),
+            refuelShipUseCase = FakeRefuelUseCase(errorRepo)
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -250,7 +266,7 @@ class ShipDetailViewModelTest {
     @Test
     fun orbitClicked_updatesNavStatusToInOrbit() = runTest {
         repository.ship = fakeShip(ShipNavStatus.DOCKED)
-        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(store, fakeNav(ShipNavStatus.IN_ORBIT)))
+        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(repository, fakeNav(ShipNavStatus.IN_ORBIT)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.OrbitClicked)
@@ -262,7 +278,7 @@ class ShipDetailViewModelTest {
     @Test
     fun orbitClicked_setsOrbitedActionResult() = runTest {
         repository.ship = fakeShip(ShipNavStatus.DOCKED)
-        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(store, fakeNav(ShipNavStatus.IN_ORBIT)))
+        val viewModel = createViewModel(orbitUseCase = FakeOrbitUseCase(repository, fakeNav(ShipNavStatus.IN_ORBIT)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.OrbitClicked)
@@ -288,7 +304,7 @@ class ShipDetailViewModelTest {
     @Test
     fun dockClicked_updatesNavStatusToDocked() = runTest {
         repository.ship = fakeShip(ShipNavStatus.IN_ORBIT)
-        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(store, fakeNav(ShipNavStatus.DOCKED)))
+        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(repository, fakeNav(ShipNavStatus.DOCKED)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.DockClicked)
@@ -300,7 +316,7 @@ class ShipDetailViewModelTest {
     @Test
     fun dockClicked_setsDockedActionResult() = runTest {
         repository.ship = fakeShip(ShipNavStatus.IN_ORBIT)
-        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(store, fakeNav(ShipNavStatus.DOCKED)))
+        val viewModel = createViewModel(dockUseCase = FakeDockUseCase(repository, fakeNav(ShipNavStatus.DOCKED)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         viewModel.onEvent(ShipDetailEvent.DockClicked)
@@ -316,7 +332,7 @@ class ShipDetailViewModelTest {
         repository.ship = fakeShip(ShipNavStatus.DOCKED)
         val viewModel = createViewModel(
             refuelUseCase = FakeRefuelUseCase(
-                store,
+                repository,
                 RefuelResult(
                     agent = Agent(null, "LADD", "X1-DF55-20250Z", 148500L, "COSMIC", 2),
                     fuel = ShipFuel(current = 400, capacity = 400),
