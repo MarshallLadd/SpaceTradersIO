@@ -6,7 +6,6 @@ import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +19,6 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ShipListViewModel @Inject constructor(
-    private val fleetStateStore: FleetStateStore,
     private val fleetRepository: FleetRepository
 ) : ViewModel() {
 
@@ -28,12 +26,12 @@ class ShipListViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<ShipListUiState> = combine(
-        fleetStateStore.entities,
+        fleetRepository.observeShips(),
         _isLoading,
         _error
     ) { ships, isLoading, error ->
         ShipListUiState(
-            ships = ships.values.map { it.toSummary() },
+            ships = ships.map { it.toSummary() },
             isLoading = isLoading,
             error = error
         )
@@ -43,9 +41,7 @@ class ShipListViewModel @Inject constructor(
     val navigationEvent = _navigationEvent.receiveAsFlow()
 
     init {
-        if (fleetStateStore.entities.value.isEmpty()) {
-            loadShips()
-        }
+        loadShips()
     }
 
     fun onEvent(event: ShipListEvent) {

@@ -1,5 +1,6 @@
 package com.brokenhuskysledteam.spacetradersio.di
 
+import android.content.Context
 import com.brokenhuskysledteam.spacetradersio.sdk.api.client.SpaceTradersClient
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
@@ -9,34 +10,37 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
+import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SqlDriverFactory
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.AgentRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCaseImpl
-import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManagerImpl
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.FulfillContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.GetMyContractsUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -65,8 +69,15 @@ object SdkModule {
 
     @Provides
     @Singleton
-    fun provideSessionManager(tokenRepository: TokenRepository): SessionManager =
-        SessionManagerImpl(tokenRepository)
+    fun provideDatabase(@ApplicationContext context: Context): SpaceTradersDatabase =
+        SpaceTradersDatabase(SqlDriverFactory(context).create())
+
+    @Provides
+    @Singleton
+    fun provideSessionManager(
+        tokenRepository: TokenRepository,
+        database: SpaceTradersDatabase
+    ): SessionManager = SessionManagerImpl(tokenRepository, database)
 
     // --- API Clients (Singleton) ---
 
@@ -100,14 +111,6 @@ object SdkModule {
     // --- Session-Scoped State (Unscoped — fetches from current session on each injection) ---
 
     @Provides
-    fun provideFleetStateStore(sm: SessionManager): FleetStateStore =
-        sm.requireSession().fleetStateStore
-
-    @Provides
-    fun provideAgentStateStore(sm: SessionManager): AgentStateStore =
-        sm.requireSession().agentStateStore
-
-    @Provides
     fun provideRefreshScheduler(sm: SessionManager): RefreshScheduler =
         sm.requireSession().refreshScheduler
 
@@ -118,11 +121,18 @@ object SdkModule {
     // --- Repositories ---
 
     @Provides
+    @Singleton
+    fun provideAgentRepository(
+        agentsApi: AgentsApi,
+        database: SpaceTradersDatabase
+    ): AgentRepository = AgentRepositoryImpl(agentsApi, database)
+
+    @Provides
     fun provideFleetRepository(
         fleetApi: FleetApi,
-        fleetStateStore: FleetStateStore,
+        database: SpaceTradersDatabase,
         refreshScheduler: RefreshScheduler
-    ): FleetRepository = FleetRepositoryImpl(fleetApi, fleetStateStore, refreshScheduler)
+    ): FleetRepository = FleetRepositoryImpl(fleetApi, database, refreshScheduler)
 
     @Provides
     fun provideSystemRepository(
@@ -153,26 +163,26 @@ object SdkModule {
     @Provides
     fun provideOrbitShipUseCase(
         fleetApi: FleetApi,
-        fleetStateStore: FleetStateStore
-    ): OrbitShipUseCase = OrbitShipUseCaseImpl(fleetApi, fleetStateStore)
+        fleetRepository: FleetRepository
+    ): OrbitShipUseCase = OrbitShipUseCaseImpl(fleetApi, fleetRepository)
 
     @Provides
     fun provideDockShipUseCase(
         fleetApi: FleetApi,
-        fleetStateStore: FleetStateStore
-    ): DockShipUseCase = DockShipUseCaseImpl(fleetApi, fleetStateStore)
+        fleetRepository: FleetRepository
+    ): DockShipUseCase = DockShipUseCaseImpl(fleetApi, fleetRepository)
 
     @Provides
     fun provideRefuelShipUseCase(
         fleetApi: FleetApi,
-        fleetStateStore: FleetStateStore,
-        agentStateStore: AgentStateStore
-    ): RefuelShipUseCase = RefuelShipUseCaseImpl(fleetApi, fleetStateStore, agentStateStore)
+        fleetRepository: FleetRepository,
+        agentRepository: AgentRepository
+    ): RefuelShipUseCase = RefuelShipUseCaseImpl(fleetApi, fleetRepository, agentRepository)
 
     @Provides
     fun provideNavigateShipUseCase(
         fleetApi: FleetApi,
-        fleetStateStore: FleetStateStore,
+        fleetRepository: FleetRepository,
         orbitShipUseCase: OrbitShipUseCase
-    ): NavigateShipUseCase = NavigateShipUseCaseImpl(fleetApi, fleetStateStore, orbitShipUseCase)
+    ): NavigateShipUseCase = NavigateShipUseCaseImpl(fleetApi, fleetRepository, orbitShipUseCase)
 }

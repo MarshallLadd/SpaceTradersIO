@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
@@ -23,7 +22,6 @@ import javax.inject.Inject
 @HiltViewModel
 class ShipDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val fleetStateStore: FleetStateStore,
     private val fleetRepository: FleetRepository,
     private val orbitShipUseCase: OrbitShipUseCase,
     private val dockShipUseCase: DockShipUseCase,
@@ -35,7 +33,7 @@ class ShipDetailViewModel @Inject constructor(
     private val _localState = MutableStateFlow(LocalState())
 
     val uiState: StateFlow<ShipDetailUiState> = combine(
-        fleetStateStore.observe(shipSymbol),
+        fleetRepository.observeShip(shipSymbol),
         _localState
     ) { ship, local ->
         ShipDetailUiState(
@@ -48,9 +46,7 @@ class ShipDetailViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipDetailUiState())
 
     init {
-        if (fleetStateStore.entities.value[shipSymbol] == null) {
-            loadShip()
-        }
+        loadShip()
     }
 
     fun onEvent(event: ShipDetailEvent) {
@@ -92,7 +88,7 @@ class ShipDetailViewModel @Inject constructor(
         _localState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
             try {
-                fleetRepository.getMyShip(shipSymbol)
+                fleetRepository.refreshMyShip(shipSymbol)
                 _localState.update { it.copy(isLoading = false) }
             } catch (e: Exception) {
                 _localState.update {
