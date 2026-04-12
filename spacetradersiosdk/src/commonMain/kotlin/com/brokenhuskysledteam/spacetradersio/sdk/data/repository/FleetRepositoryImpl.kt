@@ -32,13 +32,13 @@ class FleetRepositoryImpl(
     override fun observeShips(): Flow<List<Ship>> =
         queries.selectAllShips()
             .asFlow()
-            .mapToList(Dispatchers.IO)
+            .mapToList(Dispatchers.Default)
             .map { rows -> rows.map { it.toDomain() } }
 
     override fun observeShip(shipSymbol: String): Flow<Ship?> =
         queries.selectShipBySymbol(shipSymbol)
             .asFlow()
-            .mapToOneOrNull(Dispatchers.IO)
+            .mapToOneOrNull(Dispatchers.Default)
             .map { it?.toDomain() }
 
     override suspend fun refreshMyShips(page: Int, limit: Int) {

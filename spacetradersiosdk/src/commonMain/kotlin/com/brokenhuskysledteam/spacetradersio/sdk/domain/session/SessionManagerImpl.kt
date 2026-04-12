@@ -1,12 +1,16 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.session
 
+import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-class SessionManagerImpl(private val tokenRepository: TokenRepository) : SessionManager {
+class SessionManagerImpl(
+    private val tokenRepository: TokenRepository,
+    private val database: SpaceTradersDatabase
+) : SessionManager {
 
     // @Volatile ensures _session writes are visible across threads. restoreIfAuthenticated()
     // is designed to be called from the main thread (app lifecycle), so its check-then-set
@@ -20,7 +24,8 @@ class SessionManagerImpl(private val tokenRepository: TokenRepository) : Session
     override fun login(token: String) {
         tokenRepository.saveToken(token)
         _session = SpaceTradersSessionImpl(
-            CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            database
         )
     }
 
@@ -33,7 +38,8 @@ class SessionManagerImpl(private val tokenRepository: TokenRepository) : Session
     override fun restoreIfAuthenticated() {
         if (tokenRepository.hasToken() && _session == null) {
             _session = SpaceTradersSessionImpl(
-                CoroutineScope(SupervisorJob() + Dispatchers.Default)
+                CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                database
             )
         }
     }

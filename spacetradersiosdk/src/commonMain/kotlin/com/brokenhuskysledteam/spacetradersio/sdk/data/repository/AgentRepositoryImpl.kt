@@ -23,7 +23,7 @@ class AgentRepositoryImpl(
     override fun observeAgent(): Flow<Agent?> =
         queries.selectAgent()
             .asFlow()
-            .mapToOneOrNull(Dispatchers.IO)
+            .mapToOneOrNull(Dispatchers.Default)
             .map { it?.toDomain() }
 
     override suspend fun refreshAgent() {

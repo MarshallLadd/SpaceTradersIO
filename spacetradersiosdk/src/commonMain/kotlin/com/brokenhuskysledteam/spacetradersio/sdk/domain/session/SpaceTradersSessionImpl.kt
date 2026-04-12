@@ -1,19 +1,19 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.session
 
+import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.ContractStateStore
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 
-class SpaceTradersSessionImpl(private val scope: CoroutineScope) : SpaceTradersSession {
+class SpaceTradersSessionImpl(
+    private val scope: CoroutineScope,
+    override val database: SpaceTradersDatabase
+) : SpaceTradersSession {
 
     override val refreshScheduler = RefreshScheduler(scope)
-    override val fleetStateStore = FleetStateStore()
-    override val agentStateStore = AgentStateStore()
     override val contractStateStore = ContractStateStore()
     override val waypointStateStore = WaypointStateStore()
 
@@ -25,5 +25,7 @@ class SpaceTradersSessionImpl(private val scope: CoroutineScope) : SpaceTradersS
 
     override fun destroy() {
         scope.cancel()
+        database.shipQueries.deleteAllShips()
+        database.agentQueries.deleteAll()
     }
 }
