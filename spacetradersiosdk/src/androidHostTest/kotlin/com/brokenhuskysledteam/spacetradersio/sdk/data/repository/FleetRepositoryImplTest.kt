@@ -1,8 +1,10 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.data.repository
 
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CooldownDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MarketTransactionDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MetaDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateResponseDto
-import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.OrbitDockResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.RefuelResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipCargoDto
@@ -12,20 +14,25 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipFuelDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavRouteDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavRouteWaypointDto
-import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.AgentDto
-import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MarketTransactionDto
-import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.MetaDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipRegistrationDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipFuel
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNav
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNavRoute
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipNavRouteWaypoint
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlightMode
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.testing.createTestDatabase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.time.Instant
 
-// Minimal ShipDto for use in fakes — all required fields, sensible defaults.
-private fun minimalShipDto(
+internal fun minimalShipDto(
     symbol: String = "LADD-1",
     navStatus: String = "DOCKED"
 ) = ShipDto(
@@ -39,7 +46,7 @@ private fun minimalShipDto(
             destination = ShipNavRouteWaypointDto("X1-DF55-20250Z", "MOON", "X1-DF55", 0, 0),
             origin = ShipNavRouteWaypointDto("X1-DF55-20250Z", "MOON", "X1-DF55", 0, 0),
             departureTime = "2025-06-01T10:00:00.000Z",
-            arrival = "2025-06-01T10:00:00.000Z"
+            arrival = "2099-01-01T01:00:00.000Z"
         ),
         status = navStatus,
         flightMode = "CRUISE"
@@ -49,27 +56,10 @@ private fun minimalShipDto(
     cooldown = CooldownDto(shipSymbol = symbol, totalSeconds = 0, remainingSeconds = 0)
 )
 
-private fun minimalNavDto(status: String = "IN_ORBIT") = ShipNavDto(
-    systemSymbol = "X1-DF55",
-    waypointSymbol = "X1-DF55-20250Z",
-    route = ShipNavRouteDto(
-        destination = ShipNavRouteWaypointDto("X1-DF55-20250Z", "MOON", "X1-DF55", 0, 0),
-        origin = ShipNavRouteWaypointDto("X1-DF55-20250Z", "MOON", "X1-DF55", 0, 0),
-        departureTime = "2025-06-01T10:00:00.000Z",
-        arrival = "2025-06-01T10:00:00.000Z"
-    ),
-    status = status,
-    flightMode = "CRUISE"
-)
-
-// Hand-written fake implementing FleetApi for repository tests.
-private class FakeFleetApi(
+internal class FakeFleetApi(
     private val ships: List<ShipDto> = listOf(minimalShipDto()),
-    private val singleShip: ShipDto = minimalShipDto(),
-    private val orbitNav: ShipNavDto = minimalNavDto("IN_ORBIT"),
-    private val dockNav: ShipNavDto = minimalNavDto("DOCKED")
+    val singleShip: ShipDto = minimalShipDto()
 ) : FleetApi {
-
     var lastGetMyShipsPage: Int = -1
     var lastGetMyShipsLimit: Int = -1
 
@@ -78,72 +68,108 @@ private class FakeFleetApi(
         lastGetMyShipsLimit = limit
         return PaginatedResponse(data = ships, meta = MetaDto(total = ships.size, page = page, limit = limit))
     }
-
     override suspend fun getMyShip(shipSymbol: String): ShipDto = singleShip
-
-    override suspend fun orbitShip(shipSymbol: String): ShipNavDto = orbitNav
-
-    override suspend fun dockShip(shipSymbol: String): ShipNavDto = dockNav
-
+    override suspend fun orbitShip(shipSymbol: String): ShipNavDto = singleShip.nav
+    override suspend fun dockShip(shipSymbol: String): ShipNavDto = singleShip.nav
     override suspend fun refuelShip(shipSymbol: String): RefuelResponseDto = RefuelResponseDto(
-        agent = AgentDto(
-            accountId = null, symbol = "LADD", headquarters = "X1-DF55-20250Z",
-            credits = 148500L, startingFaction = "COSMIC", shipCount = 2
-        ),
+        agent = AgentDto(null, "LADD", "X1-DF55-20250Z", 148500L, "COSMIC", 2),
         fuel = ShipFuelDto(current = 400, capacity = 400),
-        transaction = MarketTransactionDto(
-            waypointSymbol = "X1-DF55-20250Z", shipSymbol = shipSymbol,
-            tradeSymbol = "FUEL", type = "PURCHASE", units = 6,
-            pricePerUnit = 75, totalPrice = 450, timestamp = "2025-06-01T10:00:00.000Z"
-        )
+        transaction = MarketTransactionDto("X1-DF55-20250Z", shipSymbol, "FUEL", "PURCHASE", 6, 75, 450, "2025-06-01T10:00:00.000Z")
     )
-
     override suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto =
-        NavigateResponseDto(nav = orbitNav, fuel = ShipFuelDto(current = 400, capacity = 400))
+        NavigateResponseDto(nav = singleShip.nav, fuel = ShipFuelDto(current = 400, capacity = 400))
 }
 
 class FleetRepositoryImplTest {
 
     @Test
-    fun getMyShips_returnsCorrectNumberOfShips() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(ships = listOf(minimalShipDto("LADD-1"), minimalShipDto("LADD-2"))), FleetStateStore(), RefreshScheduler(this))
-        val result = repo.getMyShips(page = 1, limit = 20)
+    fun observeShips_emptyDb_emitsEmptyList() = runTest {
+        val repo = FleetRepositoryImpl(FakeFleetApi(), createTestDatabase(), RefreshScheduler(backgroundScope))
+        val result = repo.observeShips().first()
+        assertEquals(emptyList(), result)
+    }
+
+    @Test
+    fun refreshMyShips_writesToDb_observeEmitsShips() = runTest {
+        val db = createTestDatabase()
+        val api = FakeFleetApi(ships = listOf(minimalShipDto("LADD-1"), minimalShipDto("LADD-2")))
+        val repo = FleetRepositoryImpl(api, db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShips()
+        val result = repo.observeShips().first()
         assertEquals(2, result.size)
     }
 
     @Test
-    fun getMyShips_mapsSymbolToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(), FleetStateStore(), RefreshScheduler(this))
-        val result = repo.getMyShips(page = 1, limit = 20)
+    fun refreshMyShips_mapsSymbolCorrectly() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShips()
+        val result = repo.observeShips().first()
         assertEquals("LADD-1", result.first().symbol)
     }
 
     @Test
-    fun getMyShips_mapsNavStatusToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(ships = listOf(minimalShipDto(navStatus = "IN_ORBIT"))), FleetStateStore(), RefreshScheduler(this))
-        val result = repo.getMyShips(page = 1, limit = 20)
-        assertEquals(ShipNavStatus.IN_ORBIT, result.first().nav.status)
-    }
-
-    @Test
-    fun getMyShips_forwardsPaginationParams() = runTest {
+    fun refreshMyShips_forwardsPaginationParams() = runTest {
         val fake = FakeFleetApi()
-        FleetRepositoryImpl(fake, FleetStateStore(), RefreshScheduler(this)).getMyShips(page = 3, limit = 5)
+        val repo = FleetRepositoryImpl(fake, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.refreshMyShips(page = 3, limit = 5)
         assertEquals(3, fake.lastGetMyShipsPage)
         assertEquals(5, fake.lastGetMyShipsLimit)
     }
 
     @Test
-    fun getMyShip_mapsSymbolToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(singleShip = minimalShipDto("LADD-3")), FleetStateStore(), RefreshScheduler(this))
-        val result = repo.getMyShip("LADD-3")
-        assertEquals("LADD-3", result.symbol)
+    fun observeShip_afterRefresh_emitsCorrectShip() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShip("LADD-1")
+        val result = repo.observeShip("LADD-1").first()
+        assertEquals("LADD-1", result?.symbol)
     }
 
     @Test
-    fun getMyShip_mapsFuelCurrentToDomain() = runTest {
-        val repo = FleetRepositoryImpl(FakeFleetApi(), FleetStateStore(), RefreshScheduler(this))
-        val result = repo.getMyShip("LADD-1")
-        assertEquals(400, result.fuel.current)
+    fun observeShip_unknownSymbol_emitsNull() = runTest {
+        val repo = FleetRepositoryImpl(FakeFleetApi(), createTestDatabase(), RefreshScheduler(backgroundScope))
+        val result = repo.observeShip("UNKNOWN").first()
+        assertNull(result)
+    }
+
+    @Test
+    fun updateShipNav_changesNavFields() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShip("LADD-1")
+        val newNav = ShipNav(
+            "X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE,
+            ShipNavRoute(
+                ShipNavRouteWaypoint("X1-DF55-20250Z", WaypointType.MOON, "X1-DF55", 0, 0),
+                ShipNavRouteWaypoint("X1-DF55-20250Z", WaypointType.MOON, "X1-DF55", 0, 0),
+                Instant.parse("2025-06-01T10:00:00Z"), Instant.parse("2099-01-01T01:00:00Z")
+            )
+        )
+        repo.updateShipNav("LADD-1", newNav)
+        val result = repo.observeShip("LADD-1").first()
+        assertEquals(ShipNavStatus.IN_ORBIT, result?.nav?.status)
+        assertEquals(400, result?.fuel?.current) // fuel unchanged
+    }
+
+    @Test
+    fun updateShipFuel_changesFuelFields() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShip("LADD-1")
+        repo.updateShipFuel("LADD-1", ShipFuel(200, 400))
+        val result = repo.observeShip("LADD-1").first()
+        assertEquals(200, result?.fuel?.current)
+        assertEquals(ShipNavStatus.DOCKED, result?.nav?.status) // nav unchanged
+    }
+
+    @Test
+    fun clearAll_emptiesTable() = runTest {
+        val db = createTestDatabase()
+        val repo = FleetRepositoryImpl(FakeFleetApi(), db, RefreshScheduler(backgroundScope))
+        repo.refreshMyShips()
+        repo.clearAll()
+        val result = repo.observeShips().first()
+        assertEquals(emptyList(), result)
     }
 }
