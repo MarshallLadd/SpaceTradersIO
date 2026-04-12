@@ -54,11 +54,13 @@ class AgentRepositoryImplTest {
 
     @Test
     fun refreshAgent_networkFails_dbUnchanged() = runTest {
-        val api = FakeAgentsApi(exception = RuntimeException("Offline"))
+        val api = FakeAgentsApi()
         val (repo, _) = createRepo(api = api)
+        repo.refreshAgent() // seed DB with credits = 150000
+        api.exception = RuntimeException("Offline")
         try { repo.refreshAgent() } catch (_: RuntimeException) {}
         val result = repo.observeAgent().first()
-        assertNull(result)
+        assertEquals(150000L, result?.credits) // pre-existing data unchanged
     }
 
     @Test
