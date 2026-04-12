@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
@@ -13,13 +14,15 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlig
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.buildMockSpaceTradersClient
+import com.brokenhuskysledteam.spacetradersio.sdk.testing.createTestDatabase
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +38,7 @@ private const val ORBIT_RESPONSE = """
         "destination": {"symbol":"X1-DF55-20250Z","type":"MOON","systemSymbol":"X1-DF55","x":0,"y":0},
         "origin": {"symbol":"X1-DF55-20250Z","type":"MOON","systemSymbol":"X1-DF55","x":0,"y":0},
         "departureTime": "2025-06-01T10:00:00.000Z",
-        "arrival": "2025-06-01T10:00:00.000Z"
+        "arrival": "2099-01-01T01:00:00.000Z"
       },
       "status": "IN_ORBIT",
       "flightMode": "CRUISE"
@@ -48,7 +51,7 @@ private val testWaypoint = ShipNavRouteWaypoint("X1-DF55-20250Z", WaypointType.M
 private val testRoute = ShipNavRoute(
     origin = testWaypoint, destination = testWaypoint,
     departureTime = Instant.parse("2025-06-01T10:00:00Z"),
-    arrivalTime = Instant.parse("2025-06-01T10:00:00Z")
+    arrivalTime = Instant.parse("2099-01-01T01:00:00Z")
 )
 private val dockedNav = ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.DOCKED, ShipNavFlightMode.CRUISE, testRoute)
 private fun testShip(symbol: String) = Ship(
@@ -61,40 +64,42 @@ private fun testShip(symbol: String) = Ship(
     cooldown = Cooldown(symbol, 0, 0, null)
 )
 
-class OrbitShipUseCaseTest {
-
-    private fun buildUseCase(store: FleetStateStore = FleetStateStore()) = OrbitShipUseCaseImpl(
-        FleetApiImpl(buildMockSpaceTradersClient { respond(
-            content = ORBIT_RESPONSE,
-            status = HttpStatusCode.OK,
-            headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
-        )}),
-        store
+private fun buildMockOrbitApi() = FleetApiImpl(buildMockSpaceTradersClient {
+    respond(
+        content = ORBIT_RESPONSE,
+        status = HttpStatusCode.OK,
+        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
     )
+})
+
+class OrbitShipUseCaseTest {
 
     @Test
     fun invoke_returnsNavWithInOrbitStatus() = runTest {
-        val nav = buildUseCase().invoke("LADD-1")
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        val nav = OrbitShipUseCaseImpl(buildMockOrbitApi(), repo).invoke("LADD-1")
         assertEquals(ShipNavStatus.IN_ORBIT, nav.status)
     }
 
     @Test
     fun invoke_returnsNavWithCorrectWaypointSymbol() = runTest {
-        val nav = buildUseCase().invoke("LADD-1")
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        val nav = OrbitShipUseCaseImpl(buildMockOrbitApi(), repo).invoke("LADD-1")
         assertEquals("X1-DF55-20250Z", nav.waypointSymbol)
     }
 
     @Test
     fun invoke_returnsNavWithCorrectSystemSymbol() = runTest {
-        val nav = buildUseCase().invoke("LADD-1")
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        val nav = OrbitShipUseCaseImpl(buildMockOrbitApi(), repo).invoke("LADD-1")
         assertEquals("X1-DF55", nav.systemSymbol)
     }
 
     @Test
-    fun invoke_updatesNavInStoreWhenShipExists() = runTest {
-        val store = FleetStateStore()
-        store.put("LADD-1", testShip("LADD-1"))
-        buildUseCase(store).invoke("LADD-1")
-        assertEquals(ShipNavStatus.IN_ORBIT, store.entities.value["LADD-1"]?.nav?.status)
+    fun invoke_updatesNavInDbWhenShipExists() = runTest {
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.saveShip(testShip("LADD-1"))
+        OrbitShipUseCaseImpl(buildMockOrbitApi(), repo).invoke("LADD-1")
+        assertEquals(ShipNavStatus.IN_ORBIT, repo.observeShip("LADD-1").first()?.nav?.status)
     }
 }

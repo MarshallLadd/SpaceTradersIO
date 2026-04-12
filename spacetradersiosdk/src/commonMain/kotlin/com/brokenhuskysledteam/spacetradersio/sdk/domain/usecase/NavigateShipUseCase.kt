@@ -4,7 +4,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.NavigateResult
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import kotlinx.coroutines.flow.first
 
 interface NavigateShipUseCase {
     suspend operator fun invoke(shipSymbol: String, waypointSymbol: String): NavigateResult
@@ -12,7 +13,7 @@ interface NavigateShipUseCase {
 
 class NavigateShipUseCaseImpl(
     private val fleetApi: FleetApi,
-    private val fleetStateStore: FleetStateStore,
+    private val fleetRepository: FleetRepository,
     private val orbitShipUseCase: OrbitShipUseCase
 ) : NavigateShipUseCase {
 
@@ -20,16 +21,15 @@ class NavigateShipUseCaseImpl(
         shipSymbol: String,
         waypointSymbol: String
     ): NavigateResult {
-        val ship = fleetStateStore.entities.value[shipSymbol]
+        val ship = fleetRepository.observeShip(shipSymbol).first()
         if (ship?.nav?.status == ShipNavStatus.DOCKED) {
             orbitShipUseCase(shipSymbol)
         }
 
         val response = fleetApi.navigateShip(shipSymbol, waypointSymbol).toDomain()
 
-        fleetStateStore.update(shipSymbol) { s ->
-            s.copy(nav = response.nav, fuel = response.fuel)
-        }
+        fleetRepository.updateShipNav(shipSymbol, response.nav)
+        fleetRepository.updateShipFuel(shipSymbol, response.fuel)
 
         return response
     }
