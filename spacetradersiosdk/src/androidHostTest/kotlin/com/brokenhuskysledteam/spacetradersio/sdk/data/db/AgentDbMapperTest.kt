@@ -52,6 +52,7 @@ class AgentDbMapperTest {
         val result = db.agentQueries.selectAgent().executeAsOneOrNull()?.toDomain()
         assertEquals(999L, result?.credits)
         assertEquals("X1-DF55-20250Z", result?.headquarters) // headquarters unchanged
+        assertEquals(3, result?.shipCount) // shipCount unchanged
     }
 
     @Test
