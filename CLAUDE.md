@@ -100,6 +100,23 @@ data/       <- Repository implementations
 
 API errors are deserialized via `HttpCallValidator` in `SpaceTradersClient` and thrown as `SpaceTradersApiException(error: SpaceTradersError, httpStatus: Int)`. The sealed `SpaceTradersError` hierarchy maps all ~90 API error codes (source: `../OpenAPISpec/space_trader_api_error_codes.json`) into categories: `AuthError`, `NavigationError`, `ShipOperationError`, `ContractError`, `MarketError`, `ConstructionError`, `GeneralError`, plus standalone types and an `Unknown` fallback. App ViewModels catch `SpaceTradersApiException` and `when`-match on the sealed type.
 
+## Architecture Reference Documents
+
+Two living reference documents in `docs/` capture the canonical patterns for this project. **Any time you introduce or change an architectural pattern, update both files to maintain parity.**
+
+| File | Audience | Use |
+|---|---|---|
+| `docs/ARCHITECTURE_REFERENCE_HUMAN.md` | Human reading | Narrative explanations, full rationale, Mermaid diagram, Gotcha callouts |
+| `docs/ARCHITECTURE_REFERENCE_AI.md` | AI context injection | Rules bullet lists, minimal code snippets, Gotchas table |
+
+**What counts as an architectural change that requires an update:**
+- A new or modified pattern in any of the 7 sections (UDF, Navigation, Domain Layer, Networking, DI, Testing)
+- A new `Gotcha` discovered (add to both the callout block in `_HUMAN.md` and the table at the bottom of `_AI.md`)
+- A new layer or subsystem added to the SDK (e.g., a new `EntityStateStore` subclass or a new session-scoped concept)
+- A dependency upgrade that changes how a pattern is implemented (e.g., a new Ktor API)
+
+**Parity rule:** Every section in `_AI.md` must have a structural counterpart in `_HUMAN.md`. If you add a Rules bullet to `_AI.md`, the corresponding rationale paragraph must exist in `_HUMAN.md` (and vice versa). The two files are different densities of the same truth, not independent documents.
+
 ## Key Dependencies & Versions
 
 | Dependency | Version |
