@@ -1,0 +1,87 @@
+CREATE TABLE ship (
+    symbol TEXT NOT NULL PRIMARY KEY,
+    -- registration
+    reg_role TEXT NOT NULL,
+    reg_faction_symbol TEXT NOT NULL,
+    -- nav
+    nav_system_symbol TEXT NOT NULL,
+    nav_waypoint_symbol TEXT NOT NULL,
+    nav_status TEXT NOT NULL,
+    nav_flight_mode TEXT NOT NULL,
+    -- route
+    route_origin_symbol TEXT NOT NULL,
+    route_origin_type TEXT NOT NULL,
+    route_origin_system TEXT NOT NULL,
+    route_origin_x INTEGER NOT NULL,
+    route_origin_y INTEGER NOT NULL,
+    route_dest_symbol TEXT NOT NULL,
+    route_dest_type TEXT NOT NULL,
+    route_dest_system TEXT NOT NULL,
+    route_dest_x INTEGER NOT NULL,
+    route_dest_y INTEGER NOT NULL,
+    route_departure TEXT NOT NULL,
+    route_arrival TEXT NOT NULL,
+    -- cargo
+    cargo_units INTEGER NOT NULL,
+    cargo_capacity INTEGER NOT NULL,
+    -- fuel
+    fuel_current INTEGER NOT NULL,
+    fuel_capacity INTEGER NOT NULL,
+    -- frame
+    frame_name TEXT NOT NULL,
+    -- cooldown
+    cooldown_total_seconds INTEGER NOT NULL,
+    cooldown_remaining_seconds INTEGER NOT NULL,
+    cooldown_expiration TEXT
+);
+
+selectAllShips:
+SELECT * FROM ship;
+
+selectShipBySymbol:
+SELECT * FROM ship WHERE symbol = ?;
+
+upsertShip:
+INSERT OR REPLACE INTO ship (
+    symbol, reg_role, reg_faction_symbol,
+    nav_system_symbol, nav_waypoint_symbol, nav_status, nav_flight_mode,
+    route_origin_symbol, route_origin_type, route_origin_system, route_origin_x, route_origin_y,
+    route_dest_symbol, route_dest_type, route_dest_system, route_dest_x, route_dest_y,
+    route_departure, route_arrival,
+    cargo_units, cargo_capacity,
+    fuel_current, fuel_capacity,
+    frame_name,
+    cooldown_total_seconds, cooldown_remaining_seconds, cooldown_expiration
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateShipNav:
+UPDATE ship SET
+    nav_system_symbol = ?,
+    nav_waypoint_symbol = ?,
+    nav_status = ?,
+    nav_flight_mode = ?,
+    route_origin_symbol = ?,
+    route_origin_type = ?,
+    route_origin_system = ?,
+    route_origin_x = ?,
+    route_origin_y = ?,
+    route_dest_symbol = ?,
+    route_dest_type = ?,
+    route_dest_system = ?,
+    route_dest_x = ?,
+    route_dest_y = ?,
+    route_departure = ?,
+    route_arrival = ?
+WHERE symbol = ?;
+
+updateShipFuel:
+UPDATE ship SET fuel_current = ?, fuel_capacity = ? WHERE symbol = ?;
+
+updateShipCargo:
+UPDATE ship SET cargo_units = ?, cargo_capacity = ? WHERE symbol = ?;
+
+updateShipCooldown:
+UPDATE ship SET cooldown_total_seconds = ?, cooldown_remaining_seconds = ?, cooldown_expiration = ? WHERE symbol = ?;
+
+deleteAllShips:
+DELETE FROM ship;

@@ -17,12 +17,16 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStat
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -84,8 +88,35 @@ private class FakeSystemRepository(
     }
 }
 
+// In-memory FleetRepository for SystemMapViewModel tests.
+// preloadShip() seeds data before the ViewModel observes it.
+private class FakeFleetRepository : FleetRepository {
+    private val _ships = MutableStateFlow<Map<String, Ship>>(emptyMap())
+
+    fun preloadShip(ship: Ship) { _ships.update { it + (ship.symbol to ship) } }
+
+    override fun observeShips(): Flow<List<Ship>> = _ships.map { it.values.toList() }
+    override fun observeShip(shipSymbol: String): Flow<Ship?> = _ships.map { it[shipSymbol] }
+    override suspend fun refreshMyShips(page: Int, limit: Int) {}
+    override suspend fun refreshMyShip(shipSymbol: String) {}
+    override suspend fun saveShip(ship: Ship) { _ships.update { it + (ship.symbol to ship) } }
+    override suspend fun updateShipNav(shipSymbol: String, nav: ShipNav) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(nav = nav)) } ?: m }
+    }
+    override suspend fun updateShipFuel(shipSymbol: String, fuel: ShipFuel) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(fuel = fuel)) } ?: m }
+    }
+    override suspend fun updateShipCargo(shipSymbol: String, cargo: ShipCargo) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(cargo = cargo)) } ?: m }
+    }
+    override suspend fun updateShipCooldown(shipSymbol: String, cooldown: Cooldown) {
+        _ships.update { m -> m[shipSymbol]?.let { m + (shipSymbol to it.copy(cooldown = cooldown)) } ?: m }
+    }
+    override suspend fun clearAll() { _ships.value = emptyMap() }
+}
+
 private class FakeNavigateShipUseCase(
-    private val fleetStore: FleetStateStore,
+    private val fleetRepo: FakeFleetRepository,
     var result: NavigateResult? = null,
     var shouldThrow: Boolean = false
 ) : NavigateShipUseCase {
@@ -97,7 +128,8 @@ private class FakeNavigateShipUseCase(
         lastWaypointSymbol = waypointSymbol
         if (shouldThrow) throw RuntimeException("Navigation failed")
         val r = result ?: throw IllegalStateException("No result configured")
-        fleetStore.update(shipSymbol) { it.copy(nav = r.nav, fuel = r.fuel) }
+        fleetRepo.updateShipNav(shipSymbol, r.nav)
+        fleetRepo.updateShipFuel(shipSymbol, r.fuel)
         return r
     }
 }
@@ -107,7 +139,7 @@ class SystemMapViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var waypointStore: WaypointStateStore
-    private lateinit var fleetStore: FleetStateStore
+    private lateinit var fleetRepo: FakeFleetRepository
     private lateinit var systemRepo: FakeSystemRepository
     private lateinit var navigateUseCase: FakeNavigateShipUseCase
 
@@ -115,9 +147,9 @@ class SystemMapViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         waypointStore = WaypointStateStore()
-        fleetStore = FleetStateStore()
+        fleetRepo = FakeFleetRepository()
         systemRepo = FakeSystemRepository(waypointStore)
-        navigateUseCase = FakeNavigateShipUseCase(fleetStore)
+        navigateUseCase = FakeNavigateShipUseCase(fleetRepo)
     }
 
     @AfterTest
@@ -136,7 +168,7 @@ class SystemMapViewModelTest {
         return SystemMapViewModel(
             savedStateHandle = SavedStateHandle(savedState),
             systemRepository = systemRepo,
-            fleetStateStore = fleetStore,
+            fleetRepository = fleetRepo,
             waypointStateStore = waypointStore,
             navigateShipUseCase = navigateUseCase
         )
@@ -205,7 +237,7 @@ class SystemMapViewModelTest {
 
     @Test
     fun distanceOriginShipLocation_changesDistances() = runTest {
-        fleetStore.put("LADD-1", fakeShip(waypointSymbol = "WP-SHIP"))
+        fleetRepo.preloadShip(fakeShip(waypointSymbol = "WP-SHIP"))
         systemRepo.waypoints = listOf(
             fakeWaypoint("WP-A", x = 0, y = 0),
             fakeWaypoint("WP-B", x = 10, y = 10)
@@ -322,7 +354,7 @@ class SystemMapViewModelTest {
                 ShipNavRoute(originWp, destWp, NOW, NOW)),
             fuel = ShipFuel(350, 400)
         )
-        fleetStore.put("LADD-1", fakeShip())
+        fleetRepo.preloadShip(fakeShip())
         systemRepo.waypoints = listOf(fakeWaypoint("X1-DF55-17335A"))
         val vm = createViewModel(shipSymbol = "LADD-1")
         testDispatcher.scheduler.advanceUntilIdle()
@@ -338,7 +370,7 @@ class SystemMapViewModelTest {
     @Test
     fun navigateToWaypoint_error_setsError() = runTest {
         navigateUseCase.shouldThrow = true
-        fleetStore.put("LADD-1", fakeShip())
+        fleetRepo.preloadShip(fakeShip())
         systemRepo.waypoints = listOf(fakeWaypoint("WP-1"))
         val vm = createViewModel(shipSymbol = "LADD-1")
         testDispatcher.scheduler.advanceUntilIdle()
@@ -358,7 +390,7 @@ class SystemMapViewModelTest {
                 ShipNavRoute(wp, wp, NOW, NOW)),
             fuel = ShipFuel(350, 400)
         )
-        fleetStore.put("LADD-1", fakeShip())
+        fleetRepo.preloadShip(fakeShip())
         systemRepo.waypoints = listOf(fakeWaypoint("WP-1"))
         val vm = createViewModel(shipSymbol = "LADD-1")
         testDispatcher.scheduler.advanceUntilIdle()
@@ -386,8 +418,8 @@ class SystemMapViewModelTest {
     // ── ship snapshot ───────────────────────────────────────────────────────
 
     @Test
-    fun selectedShip_populatedFromFleetStore() = runTest {
-        fleetStore.put("LADD-1", fakeShip())
+    fun selectedShip_populatedFromFleetRepository() = runTest {
+        fleetRepo.preloadShip(fakeShip())
         systemRepo.waypoints = listOf(fakeWaypoint("WP-1"))
         val vm = createViewModel(shipSymbol = "LADD-1")
         testDispatcher.scheduler.advanceUntilIdle()

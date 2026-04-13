@@ -4,21 +4,17 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.RefuelResult
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipFuel
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 
-// Refuels a ship to maximum capacity from the local market.
-// Returns the updated agent, fuel state, and the market transaction — all three
-// are needed by the UI to display the command output (cost + new balance).
-// Defined as an interface so the app layer can substitute a fake for testing.
 interface RefuelShipUseCase {
     suspend operator fun invoke(shipSymbol: String): RefuelResult
 }
 
 class RefuelShipUseCaseImpl(
     private val fleetApi: FleetApi,
-    private val fleetStateStore: FleetStateStore,
-    private val agentStateStore: AgentStateStore
+    private val fleetRepository: FleetRepository,
+    private val agentRepository: AgentRepository
 ) : RefuelShipUseCase {
     override suspend operator fun invoke(shipSymbol: String): RefuelResult {
         val response = fleetApi.refuelShip(shipSymbol)
@@ -27,8 +23,8 @@ class RefuelShipUseCaseImpl(
             fuel = ShipFuel(current = response.fuel.current, capacity = response.fuel.capacity),
             transaction = response.transaction.toDomain()
         )
-        fleetStateStore.update(shipSymbol) { ship -> ship.copy(fuel = result.fuel) }
-        agentStateStore.update(result.agent)
+        fleetRepository.updateShipFuel(shipSymbol, result.fuel)
+        agentRepository.saveAgent(result.agent)
         return result
     }
 }

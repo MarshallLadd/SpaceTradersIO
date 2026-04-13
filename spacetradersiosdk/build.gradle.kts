@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.android.lint)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.sqldelight)
 }
 
 
@@ -77,6 +78,7 @@ kotlin {
                 implementation(libs.napier)
                 implementation(libs.multiplatform.settings)
                 implementation(libs.multiplatform.settings.no.arg)
+                implementation(libs.sqldelight.coroutines)
             }
         }
 
@@ -85,6 +87,7 @@ kotlin {
                 implementation(libs.kotlin.test)
                 implementation(libs.ktor.client.mock)
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.sqldelight.jvm.driver)
             }
         }
 
@@ -94,6 +97,7 @@ kotlin {
                 // commonMain by default and will correctly pull the Android artifacts of any KMP
                 // dependencies declared in commonMain.
                 implementation(libs.ktor.client.okhttp)
+                implementation(libs.sqldelight.android.driver)
             }
         }
 
@@ -114,7 +118,17 @@ kotlin {
                 // on common by default and will correctly pull the iOS artifacts of any
                 // KMP dependencies declared in commonMain.
                 implementation(libs.ktor.client.darwin)
+                implementation(libs.sqldelight.native.driver)
             }
+        }
+    }
+}
+
+sqldelight {
+    databases {
+        create("SpaceTradersDatabase") {
+            packageName.set("com.brokenhuskysledteam.spacetradersio.sdk.data.db")
+            dialect(libs.sqldelight.dialect)
         }
     }
 }

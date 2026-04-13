@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
@@ -13,25 +14,26 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlig
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.buildMockSpaceTradersClient
+import com.brokenhuskysledteam.spacetradersio.sdk.testing.createTestDatabase
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Instant
 
-private val NOW = Instant.parse("2025-06-01T10:00:00.000Z")
-
 private val testWaypoint = ShipNavRouteWaypoint("X1-DF55-20250Z", WaypointType.MOON, "X1-DF55", 0, 0)
 private val testRoute = ShipNavRoute(
     origin = testWaypoint, destination = testWaypoint,
-    departureTime = NOW, arrivalTime = NOW
+    departureTime = Instant.parse("2025-06-01T10:00:00Z"),
+    arrivalTime = Instant.parse("2099-01-01T01:00:00Z")
 )
 
 private fun testShip(status: ShipNavStatus) = Ship(
@@ -71,34 +73,30 @@ private fun MockRequestHandleScope.okJson(content: String) = respond(
     headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
 )
 
+private fun buildNavigateUseCase(
+    repo: FleetRepositoryImpl,
+    fakeOrbit: OrbitShipUseCase
+): NavigateShipUseCaseImpl {
+    val client = buildMockSpaceTradersClient { okJson(NAVIGATE_RESPONSE) }
+    return NavigateShipUseCaseImpl(FleetApiImpl(client), repo, fakeOrbit)
+}
+
 class NavigateShipUseCaseTest {
-
-    private var orbitInvoked = false
-
-    private fun buildUseCase(
-        store: FleetStateStore = FleetStateStore(),
-        fakeOrbit: OrbitShipUseCase = object : OrbitShipUseCase {
-            override suspend fun invoke(shipSymbol: String): ShipNav {
-                orbitInvoked = true
-                val nav = ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
-                store.update(shipSymbol) { it.copy(nav = nav) }
-                return nav
-            }
-        }
-    ): Pair<NavigateShipUseCaseImpl, FleetStateStore> {
-        val client = buildMockSpaceTradersClient { okJson(NAVIGATE_RESPONSE) }
-        val fleetApi = FleetApiImpl(client)
-        return NavigateShipUseCaseImpl(fleetApi, store, fakeOrbit) to store
-    }
 
     @Test
     fun invoke_shipInOrbit_navigatesDirectly() = runTest {
-        orbitInvoked = false
-        val store = FleetStateStore()
-        store.put("LADD-1", testShip(ShipNavStatus.IN_ORBIT))
-        val (useCase, _) = buildUseCase(store)
-
-        val result = useCase("LADD-1", "X1-DF55-17335A")
+        var orbitInvoked = false
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.saveShip(testShip(ShipNavStatus.IN_ORBIT))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav {
+                orbitInvoked = true
+                val nav = ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+                repo.updateShipNav(shipSymbol, nav)
+                return nav
+            }
+        }
+        val result = buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
         assertEquals(ShipNavStatus.IN_TRANSIT, result.nav.status)
         assertEquals(false, orbitInvoked)
@@ -106,57 +104,73 @@ class NavigateShipUseCaseTest {
 
     @Test
     fun invoke_shipDocked_callsOrbitFirst() = runTest {
-        orbitInvoked = false
-        val store = FleetStateStore()
-        store.put("LADD-1", testShip(ShipNavStatus.DOCKED))
-        val (useCase, _) = buildUseCase(store)
-
-        useCase("LADD-1", "X1-DF55-17335A")
+        var orbitInvoked = false
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.saveShip(testShip(ShipNavStatus.DOCKED))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav {
+                orbitInvoked = true
+                val nav = ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+                repo.updateShipNav(shipSymbol, nav)
+                return nav
+            }
+        }
+        buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
         assertEquals(true, orbitInvoked)
     }
 
     @Test
     fun invoke_returnsNavigateResult() = runTest {
-        val store = FleetStateStore()
-        store.put("LADD-1", testShip(ShipNavStatus.IN_ORBIT))
-        val (useCase, _) = buildUseCase(store)
-
-        val result = useCase("LADD-1", "X1-DF55-17335A")
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.saveShip(testShip(ShipNavStatus.IN_ORBIT))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav =
+                ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+        }
+        val result = buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
         assertEquals("X1-DF55-17335A", result.nav.waypointSymbol)
         assertEquals(350, result.fuel.current)
     }
 
     @Test
-    fun invoke_updatesFleetStoreNavStatus() = runTest {
-        val store = FleetStateStore()
-        store.put("LADD-1", testShip(ShipNavStatus.IN_ORBIT))
-        val (useCase, _) = buildUseCase(store)
+    fun invoke_updatesNavInDb() = runTest {
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.saveShip(testShip(ShipNavStatus.IN_ORBIT))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav =
+                ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+        }
+        buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
-        useCase("LADD-1", "X1-DF55-17335A")
-
-        assertEquals(ShipNavStatus.IN_TRANSIT, store.entities.value["LADD-1"]?.nav?.status)
+        assertEquals(ShipNavStatus.IN_TRANSIT, repo.observeShip("LADD-1").first()?.nav?.status)
     }
 
     @Test
-    fun invoke_updatesFleetStoreFuel() = runTest {
-        val store = FleetStateStore()
-        store.put("LADD-1", testShip(ShipNavStatus.IN_ORBIT))
-        val (useCase, _) = buildUseCase(store)
+    fun invoke_updatesFuelInDb() = runTest {
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        repo.saveShip(testShip(ShipNavStatus.IN_ORBIT))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav =
+                ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+        }
+        buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
-        useCase("LADD-1", "X1-DF55-17335A")
-
-        assertEquals(350, store.entities.value["LADD-1"]?.fuel?.current)
+        assertEquals(350, repo.observeShip("LADD-1").first()?.fuel?.current)
     }
 
     @Test
-    fun invoke_shipNotInStore_skipsOrbit_navigatesAnyway() = runTest {
-        orbitInvoked = false
-        val store = FleetStateStore()
-        val (useCase, _) = buildUseCase(store)
-
-        val result = useCase("LADD-1", "X1-DF55-17335A")
+    fun invoke_shipNotInDb_skipsOrbit_navigatesAnyway() = runTest {
+        var orbitInvoked = false
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), RefreshScheduler(backgroundScope))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav {
+                orbitInvoked = true
+                return ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+            }
+        }
+        val result = buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
         assertEquals(false, orbitInvoked)
         assertEquals(ShipNavStatus.IN_TRANSIT, result.nav.status)

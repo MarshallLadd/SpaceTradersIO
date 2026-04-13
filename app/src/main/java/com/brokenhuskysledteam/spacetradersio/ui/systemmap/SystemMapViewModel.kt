@@ -8,8 +8,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Waypoint
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.euclideanDistance
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.FleetStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -26,7 +27,7 @@ import javax.inject.Inject
 class SystemMapViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val systemRepository: SystemRepository,
-    private val fleetStateStore: FleetStateStore,
+    private val fleetRepository: FleetRepository,
     private val waypointStateStore: WaypointStateStore,
     private val navigateShipUseCase: NavigateShipUseCase
 ) : ViewModel() {
@@ -39,7 +40,7 @@ class SystemMapViewModel @Inject constructor(
 
     val uiState: StateFlow<SystemMapUiState> = combine(
         waypointStateStore.entities,
-        fleetStateStore.entities,
+        fleetRepository.observeShips().map { ships -> ships.associateBy { it.symbol } },
         _localState
     ) { waypointMap, fleetMap, local ->
         val ship = shipSymbol?.let { fleetMap[it] }
@@ -116,17 +117,18 @@ class SystemMapViewModel @Inject constructor(
 
     private fun navigate(waypointSymbol: String) {
         val ship = shipSymbol ?: return
+        // Capture fuel before navigation using the current UI state snapshot (pre-navigate DB state).
+        val fuelBefore = uiState.value.selectedShip?.fuelCurrent
         _localState.update { it.copy(isActionInProgress = true, actionResult = null, error = null) }
         viewModelScope.launch {
             try {
                 val result = navigateShipUseCase(ship, waypointSymbol)
-                val fuelBefore = fleetStateStore.entities.value[ship]?.fuel?.current ?: result.fuel.current
                 _localState.update {
                     it.copy(
                         isActionInProgress = false,
                         actionResult = SystemMapActionResult.NavigationStarted(
                             destinationSymbol = waypointSymbol,
-                            fuelConsumed = fuelBefore - result.fuel.current,
+                            fuelConsumed = (fuelBefore ?: result.fuel.current) - result.fuel.current,
                             fuelRemaining = result.fuel.current
                         )
                     )

@@ -3,12 +3,10 @@ package com.brokenhuskysledteam.spacetradersio.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.brokenhuskysledteam.spacetradersio.navigation.NavigationTarget
-import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApi
-import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersApiException
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.SpaceTradersError
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
-import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.AgentStateStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,8 +20,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val agentsApi: AgentsApi,
-    private val agentStateStore: AgentStateStore,
+    private val agentRepository: AgentRepository,
     private val sessionManager: SessionManager
 ) : ViewModel() {
 
@@ -31,7 +28,7 @@ class DashboardViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<DashboardUiState> = combine(
-        agentStateStore.agent,
+        agentRepository.observeAgent(),
         _isLoading,
         _error
     ) { agent, isLoading, error ->
@@ -61,8 +58,7 @@ class DashboardViewModel @Inject constructor(
         _error.value = null
         viewModelScope.launch {
             try {
-                val agent = agentsApi.getMyAgent().toDomain()
-                agentStateStore.update(agent)
+                agentRepository.refreshAgent()
                 _isLoading.value = false
             } catch (e: SpaceTradersApiException) {
                 when (e.error) {

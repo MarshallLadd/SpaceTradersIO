@@ -5,6 +5,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.FactionSymb
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManagerImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.buildMockSpaceTradersClient
+import com.brokenhuskysledteam.spacetradersio.sdk.testing.createTestDatabase
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -64,7 +65,7 @@ class RegisterAgentUseCaseTest {
             status = HttpStatusCode.Created,
             headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString())
         )}
-        return RegisterAgentUseCaseImpl(AccountsApi(client), SessionManagerImpl(tokenRepo))
+        return RegisterAgentUseCaseImpl(AccountsApi(client), SessionManagerImpl(tokenRepo, createTestDatabase()))
     }
 
     @Test
@@ -99,7 +100,7 @@ class RegisterAgentUseCaseTest {
     @Test
     fun invoke_createsActiveSession() = runTest {
         val tokenRepo = FakeTokenRepository(storedToken = null)
-        val sessionManager = SessionManagerImpl(tokenRepo)
+        val sessionManager = SessionManagerImpl(tokenRepo, createTestDatabase())
         val client = buildMockSpaceTradersClient(
             tokenRepository = FakeTokenRepository(storedToken = null)
         ) { respond(
