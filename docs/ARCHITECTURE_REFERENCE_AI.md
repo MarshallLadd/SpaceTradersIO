@@ -25,13 +25,14 @@ Package namespace: `com.brokenhuskysledteam.spacetradersio` (app), `com.brokenhu
 | API impls, DTOs, mappers | `:spacetradersiosdk` | `sdk/api/` |
 | Domain models, use cases, repository interfaces | `:spacetradersiosdk` | `sdk/domain/` |
 | Repository impls, data sources | `:spacetradersiosdk` | `sdk/data/` |
-| State stores, session, scheduler | `:spacetradersiosdk` | `sdk/domain/state/`, `sdk/domain/session/` |
+| Session, scheduler, waypoint store | `:spacetradersiosdk` | `sdk/domain/state/`, `sdk/domain/session/` |
+| SQLDelight DB (ships, agents) | `:spacetradersiosdk` | `sdk/data/db/` |
 
 **Data flow (text):**
 ```
 Compose Screen → ViewModel → UseCase → Repository → API → SpaceTradersClient (Ktor) → REST
-     ↑ StateFlow<UiState>         ↑ EntityStateStore   ↑ DTO.toDomain()
-     ↑ Channel<NavigationTarget>
+     ↑ StateFlow<UiState>         ↑ SQLDelight DB   ↑ DTO.toDomain()
+     ↑ Channel<NavigationTarget>  (ships/agents: Flow from DB; waypoints: WaypointStateStore)
 ```
 
 ---
@@ -160,9 +161,11 @@ fun AppNavHost(tokenRepository: TokenRepository, modifier: Modifier = Modifier) 
 - Mappers: `fun DtoType.toDomain(): DomainType` extension functions in `api/mapper/`. Never serialize in domain layer.
 - Domain models: plain `data class` in `domain/model/`. Zero annotations.
 - Repository interface: in `domain/repository/`. Application layer depends on interface only.
-- Repository impl: in `data/repository/`. Orchestrates API calls, writes to `EntityStateStore`, registers `RefreshScheduler` timers.
-- Repository is the **only writer** to state stores. ViewModels are read-only observers.
+- Repository impl: in `data/repository/`. Calls API, persists to SQLDelight DB (ships/agents) or `EntityStateStore` (waypoints), registers `RefreshScheduler` timers.
+- Repository is the **only writer** to the DB and state stores. ViewModels are read-only observers.
 - Use cases: `interface` + `operator fun invoke()` in `domain/usecase/`. Justify existence with orchestration logic (pre-conditions, multi-step, composing other use cases). Single-call delegation with no logic = skip the use case.
+- Ships and agents use SQLDelight as persistence layer — Flow observation via `asFlow().mapToList/mapToOneOrNull(Dispatchers.Default)`. Never `Dispatchers.IO` in `commonMain` (iOS incompatible).
+- Waypoints still use `WaypointStateStore` (in-memory `EntityStateStore<String, Waypoint>`) — no DB backing needed.
 - `EntityStateStore` mutations use `MutableStateFlow.update{}` (atomic). Never `.value =` on maps.
 
 **DTO + Mapper + Domain:**
@@ -172,15 +175,46 @@ fun FooDto.toDomain() = Foo(id, name, optionalField)
 data class Foo(val id: String, val name: String, val optionalField: String?)
 ```
 
-**Repository:**
+**Repository (SQLDelight-backed, e.g. ships/agents):**
 ```kotlin
-interface FooRepository { suspend fun getFoo(id: String): Foo }
+interface ShipRepository {
+    fun observeShips(): Flow<List<Ship>>
+    fun observeShip(symbol: String): Flow<Ship?>
+    suspend fun refreshMyShips(page: Int = 1, limit: Int = 20)
+    suspend fun saveShip(ship: Ship)
+    suspend fun updateShipNav(symbol: String, nav: ShipNav)
+    suspend fun clearAll()
+}
 
-class FooRepositoryImpl(private val api: FooApi, private val store: FooStateStore) : FooRepository {
-    override suspend fun getFoo(id: String): Foo {
-        val foo = api.getFoo(id).toDomain()
-        store.put(id, foo)
-        return foo
+class ShipRepositoryImpl(
+    private val api: FleetApi,
+    private val database: SpaceTradersDatabase,
+    private val refreshScheduler: RefreshScheduler
+) : ShipRepository {
+    override fun observeShips(): Flow<List<Ship>> =
+        database.shipQueries.selectAll().asFlow().mapToList(Dispatchers.Default).map { rows -> rows.map { it.toDomain() } }
+    override fun observeShip(symbol: String): Flow<Ship?> =
+        database.shipQueries.selectBySymbol(symbol).asFlow().mapToOneOrNull(Dispatchers.Default).map { it?.toDomain() }
+    override suspend fun refreshMyShips(page: Int, limit: Int) {
+        val ships = api.getMyShips(page, limit).data.map { it.toDomain() }
+        ships.forEach { database.shipQueries.upsertShip(it.toEntity()) }
+        refreshScheduler.scheduleRefresh(/* transit ships */)
+    }
+    override suspend fun saveShip(ship: Ship) { database.shipQueries.upsertShip(ship.toEntity()) }
+    override suspend fun updateShipNav(symbol: String, nav: ShipNav) { database.shipQueries.updateNav(/* fields */) }
+    override suspend fun clearAll() { database.shipQueries.deleteAllShips() }
+}
+```
+
+**Repository (StateStore-backed, e.g. waypoints):**
+```kotlin
+interface WaypointRepository { suspend fun getWaypoints(systemSymbol: String): List<Waypoint> }
+
+class WaypointRepositoryImpl(private val api: SystemsApi, private val store: WaypointStateStore) : WaypointRepository {
+    override suspend fun getWaypoints(systemSymbol: String): List<Waypoint> {
+        val waypoints = api.getSystemWaypoints(systemSymbol).data.map { it.toDomain() }
+        store.putAll(waypoints.associateBy { it.symbol })
+        return waypoints
     }
 }
 ```
@@ -189,37 +223,41 @@ class FooRepositoryImpl(private val api: FooApi, private val store: FooStateStor
 ```kotlin
 interface DoFooUseCase { suspend operator fun invoke(id: String): FooResult }
 
-class DoFooUseCaseImpl(private val api: FooApi, private val store: FooStateStore) : DoFooUseCase {
+class DoFooUseCaseImpl(private val api: FooApi, private val repository: FooRepository) : DoFooUseCase {
     override suspend operator fun invoke(id: String): FooResult {
         val result = api.doFoo(id).toDomain()
-        store.update(id) { it.copy(status = result.newStatus) }
+        repository.updateFooState(id, result.newState)
         return result
     }
 }
 ```
 
-**EntityStateStore:**
+**Session (interface + impl):**
 ```kotlin
-class EntityStateStore<K, T> {
-    private val _entities = MutableStateFlow<Map<K, T>>(emptyMap())
-    val entities: StateFlow<Map<K, T>> = _entities.asStateFlow()
-    fun observe(key: K): Flow<T?> = _entities.map { it[key] }.distinctUntilChanged()
-    fun put(key: K, entity: T) = _entities.update { it + (key to entity) }
-    fun putAll(map: Map<K, T>) = _entities.update { it + map }
-    fun update(key: K, transform: (T) -> T) = _entities.update { m -> m[key]?.let { m + (key to transform(it)) } ?: m }
-    fun remove(key: K) = _entities.update { it - key }
-    fun clear() = _entities.update { emptyMap() }
+interface SpaceTradersSession {
+    val refreshScheduler: RefreshScheduler
+    val contractStateStore: ContractStateStore
+    val waypointStateStore: WaypointStateStore
+    val database: SpaceTradersDatabase
+    val isActive: Boolean
+    fun onResume()
+    fun destroy()
 }
-class FooStateStore : EntityStateStore<String, Foo>()
-```
 
-**Session:**
-```kotlin
-class SpaceTradersSession(scope: CoroutineScope) {
-    val refreshScheduler = RefreshScheduler(scope)
-    val fooStateStore = FooStateStore()
-    fun onResume() { refreshScheduler.onResume() }
-    fun destroy() { scope.cancel() }
+class SpaceTradersSessionImpl(
+    private val scope: CoroutineScope,
+    override val database: SpaceTradersDatabase
+) : SpaceTradersSession {
+    override val refreshScheduler = RefreshScheduler(scope)
+    override val contractStateStore = ContractStateStore()
+    override val waypointStateStore = WaypointStateStore()
+    override val isActive: Boolean get() = scope.isActive
+    override fun onResume() { refreshScheduler.onResume() }
+    override fun destroy() {
+        scope.cancel()
+        database.shipQueries.deleteAllShips()
+        database.agentQueries.deleteAll()
+    }
 }
 ```
 
@@ -286,31 +324,38 @@ class FooApiImpl(private val client: SpaceTradersClient) : FooApi {
 
 **Rules:**
 - Single module: `@Module @InstallIn(SingletonComponent::class) object SdkModule`.
-- `@Singleton`: `TokenRepository`, `SpaceTradersClient`, `SessionManager`, all API impls.
-- Unscoped (no annotation): session-dependent stores + scheduler — delegate to `sm.requireSession().xxxStore`. Safe because authenticated screens are behind nav guards.
-- Unscoped: repositories and use cases (stateless or session-scoped via injected deps).
+- `@Singleton`: `TokenRepository`, `SpaceTradersClient`, `SessionManager`, `SpaceTradersDatabase`, `AgentRepository`, all API impls.
+- `SpaceTradersDatabase` is a singleton: `SqlDriverFactory(@ApplicationContext context).create()` — one DB for the app lifetime.
+- `AgentRepository` is singleton because it only depends on `AgentsApi` + `SpaceTradersDatabase` (both singletons).
+- `FleetRepository` is **unscoped** because it depends on `RefreshScheduler` (session-scoped). Same for use cases that touch session state.
+- Unscoped: session-dependent scheduler + state stores — delegate to `sm.requireSession().xxxStore`.
 - `@HiltViewModel` on every ViewModel. `@AndroidEntryPoint` on `MainActivity`. `@HiltAndroidApp` on `Application`.
 
-**SdkModule skeleton:**
+**SdkModule skeleton (three tiers):**
 ```kotlin
 @Module
 @InstallIn(SingletonComponent::class)
 object SdkModule {
-    // --- @Singleton: infrastructure ---
+    // --- Tier 1: @Singleton infrastructure ---
     @Provides @Singleton fun provideTokenRepository(): TokenRepository = TokenRepositoryImpl(Settings())
     @Provides @Singleton fun provideClient(repo: TokenRepository): SpaceTradersClient = SpaceTradersClient(repo)
-    @Provides @Singleton fun provideSessionManager(repo: TokenRepository): SessionManager = SessionManagerImpl(repo)
+    @Provides @Singleton fun provideDatabase(@ApplicationContext ctx: Context): SpaceTradersDatabase =
+        SpaceTradersDatabase(SqlDriverFactory(ctx).create())
+    @Provides @Singleton fun provideSessionManager(repo: TokenRepository, db: SpaceTradersDatabase): SessionManager =
+        SessionManagerImpl(repo, db)
     @Provides @Singleton fun provideFooApi(client: SpaceTradersClient): FooApi = FooApiImpl(client)
+    @Provides @Singleton fun provideAgentRepository(api: AgentsApi, db: SpaceTradersDatabase): AgentRepository =
+        AgentRepositoryImpl(api, db)
 
-    // --- Unscoped: session-dependent state ---
-    @Provides fun provideFooStateStore(sm: SessionManager): FooStateStore = sm.requireSession().fooStateStore
+    // --- Tier 2: Unscoped session-dependent state ---
+    @Provides fun provideWaypointStateStore(sm: SessionManager): WaypointStateStore = sm.requireSession().waypointStateStore
     @Provides fun provideRefreshScheduler(sm: SessionManager): RefreshScheduler = sm.requireSession().refreshScheduler
 
-    // --- Unscoped: repositories + use cases ---
-    @Provides fun provideFooRepository(api: FooApi, store: FooStateStore, sched: RefreshScheduler): FooRepository =
-        FooRepositoryImpl(api, store, sched)
-    @Provides fun provideDoFooUseCase(api: FooApi, store: FooStateStore): DoFooUseCase =
-        DoFooUseCaseImpl(api, store)
+    // --- Tier 3: Unscoped repositories + use cases ---
+    @Provides fun provideFleetRepository(api: FleetApi, db: SpaceTradersDatabase, sched: RefreshScheduler): FleetRepository =
+        FleetRepositoryImpl(api, db, sched)
+    @Provides fun provideDoFooUseCase(api: FooApi, repo: FooRepository): DoFooUseCase =
+        DoFooUseCaseImpl(api, repo)
 }
 ```
 
@@ -329,6 +374,9 @@ object SdkModule {
 - `RefreshScheduler` in tests: use `backgroundScope`, not `this`. Prevents `UncompletedCoroutinesError`.
 - Transit test fixtures: always use far-future `arrivalTime = "2099-01-01T01:00:00.000Z"`. Past dates → infinite refresh loop → OOM.
 - `SharingStarted.Eagerly` in ViewModels when tests read `.value` directly.
+- Fake repositories for ViewModel tests: back with `MutableStateFlow<Map<String, T>>(emptyMap())` — start **empty**. Populate only inside `refreshXxx()`. Pre-populating the flow bypasses the loading path and breaks error-state tests.
+- Use case fakes that mutate entity state should call `repo.updateXxx()` (not `store.update()`), matching the production contract.
+- When a test needs state before ViewModel init (e.g. a ship already in cache), add a synchronous `preloadXxx(entity)` helper to the fake repository that calls `_state.update { ... }` directly.
 
 **Test helper skeleton:**
 ```kotlin
@@ -412,3 +460,5 @@ class FooViewModelTest {
 | `ProcessLifecycleOwner` | Requires `androidx-lifecycle-process` dep (not bundled with lifecycle-runtime-ktx). |
 | `kotlin-test` in app tests | Use `kotlin-test-junit` bridge. Plain `kotlin-test` missing JVM annotations. |
 | `@Volatile` in `commonMain` | `import kotlin.concurrent.Volatile`. `synchronized {}` is JVM-only. |
+| `Dispatchers.IO` in `commonMain` | Not available — iOS has no IO dispatcher. Use `Dispatchers.Default` for SQLDelight `asFlow().mapToList/mapToOneOrNull(Dispatchers.Default)`. |
+| Fake repository init in tests | Start `MutableStateFlow` **empty** (`emptyMap()`). Populate only inside `refreshXxx()`. Pre-populating skips the load path and breaks error-state assertions. |
