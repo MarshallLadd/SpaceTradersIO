@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.time.Instant
 
 private val testWaypoint = ShipNavRouteWaypoint("X1-DF55-20250Z", WaypointType.MOON, "X1-DF55", 0, 0)
@@ -158,6 +159,20 @@ class NavigateShipUseCaseTest {
         buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
 
         assertEquals(350, repo.observeShip("LADD-1").first()?.fuel?.current)
+    }
+
+    @Test
+    fun invoke_schedulesTransitRefreshTimer() = runTest {
+        val scheduler = RefreshScheduler(backgroundScope)
+        val repo = FleetRepositoryImpl(StubFleetApi, createTestDatabase(), scheduler)
+        repo.saveShip(testShip(ShipNavStatus.IN_ORBIT))
+        val fakeOrbit = object : OrbitShipUseCase {
+            override suspend fun invoke(shipSymbol: String): ShipNav =
+                ShipNav("X1-DF55", "X1-DF55-20250Z", ShipNavStatus.IN_ORBIT, ShipNavFlightMode.CRUISE, testRoute)
+        }
+        buildNavigateUseCase(repo, fakeOrbit).invoke("LADD-1", "X1-DF55-17335A")
+
+        assertNotNull(scheduler.activeTimers.value["transit:LADD-1"])
     }
 
     @Test

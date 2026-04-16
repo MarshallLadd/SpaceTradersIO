@@ -61,6 +61,13 @@ class FleetRepositoryImpl(
 
     override suspend fun updateShipNav(shipSymbol: String, nav: ShipNav) {
         queries.updateShipNav(nav, shipSymbol)
+        if (nav.status == ShipNavStatus.IN_TRANSIT) {
+            refreshScheduler.schedule(
+                id = "transit:$shipSymbol",
+                expiresAt = nav.route.arrivalTime,
+                action = { refreshMyShip(shipSymbol) }
+            )
+        }
     }
 
     override suspend fun updateShipFuel(shipSymbol: String, fuel: ShipFuel) {
