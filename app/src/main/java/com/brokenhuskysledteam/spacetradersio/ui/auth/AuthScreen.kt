@@ -40,19 +40,43 @@ import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalCard
 import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalTextField
 import com.brokenhuskysledteam.spacetradersio.ui.theme.TerminalDarkGray
 
-// Stateful wrapper that wires the Hilt-provided ViewModel to the stateless content.
-// The LaunchedEffect collects one-shot navigation events from the ViewModel's Channel.
+/**
+ * Stateful entry-point composable for the Auth screen.
+ *
+ * **Pattern:** Stateful/stateless composable split. This composable is the *stateful* half: it
+ * owns ViewModel acquisition, state collection, and side-effect handling. It immediately delegates
+ * all rendering to [AuthScreenContent], which is the *stateless* half. To apply this in a new
+ * project: keep one thin stateful wrapper per screen that handles ViewModel wiring, and push all
+ * layout and rendering into a stateless sibling that accepts only plain data and lambda callbacks.
+ *
+ * **In this project:** [AuthScreen] is the composable registered in the navigation graph. It is
+ * the only place in the Auth screen that knows about [AuthViewModel] — [AuthScreenContent] and
+ * all its children are completely decoupled from the ViewModel, making them trivially testable
+ * and previewable.
+ *
+ * @param onNavigateToDashboard Callback invoked when authentication succeeds; the NavHost uses
+ *   this to pop the auth destination and push the dashboard.
+ * @param viewModel Hilt-provided [AuthViewModel]; defaulted via [hiltViewModel] so callers
+ *   don't need to pass it explicitly.
+ */
 @Composable
 fun AuthScreen(
     onNavigateToDashboard: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
+    // collectAsStateWithLifecycle stops collection when the lifecycle drops below STARTED
+    // (e.g. the screen is in the back stack). This prevents unnecessary recompositions and
+    // avoids processing UI updates while the composable is not visible.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // LaunchedEffect(Unit) launches a coroutine that lives as long as this composable is in the
+    // composition. The Unit key means it is never restarted. The coroutine collects the Channel
+    // as a Flow — each emitted NavigationTarget triggers exactly one navigation action.
     LaunchedEffect(Unit) {
         viewModel.navigationEvent.collect { target ->
             when (target) {
                 NavigationTarget.Dashboard -> onNavigateToDashboard()
+                // Other navigation targets are not valid from the Auth screen; ignore them.
                 else -> {}
             }
         }
@@ -64,8 +88,23 @@ fun AuthScreen(
     )
 }
 
-// Stateless content composable — receives state and emits events.
-// Styled as a system login terminal with scanline overlay.
+/**
+ * Stateless content composable for the Auth screen.
+ *
+ * **Pattern:** Stateless composable. This composable receives an immutable [AuthUiState] snapshot
+ * and a single `(AuthEvent) -> Unit` lambda. It owns no state of its own (beyond local UI
+ * mechanics like dropdown expanded state) and issues no side effects. This makes it a pure
+ * function of its inputs: given the same [uiState], it always renders the same UI. To apply this
+ * in a new project: every screen's primary content composable should follow this shape —
+ * `content(uiState: MyUiState, onEvent: (MyEvent) -> Unit)`.
+ *
+ * **In this project:** Styled as a retro system login terminal with a [ScanlineOverlay] for the
+ * green-on-black aesthetic. The two auth modes ([NewAgentTab] and [ImportTokenTab]) are swapped
+ * based on [AuthUiState.selectedTab].
+ *
+ * @param uiState The current render snapshot from [AuthViewModel].
+ * @param onEvent Callback that routes user interactions back to [AuthViewModel.onEvent].
+ */
 @Composable
 fun AuthScreenContent(
     uiState: AuthUiState,
@@ -80,6 +119,8 @@ fun AuthScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
+                // verticalScroll allows the form to remain usable on small screens or when the
+                // soft keyboard pushes content upward.
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -101,7 +142,9 @@ fun AuthScreenContent(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Tab selector — two TerminalButtons acting as a toggle.
+            // Tab selector — two TerminalButtons acting as a toggle. The active tab is indicated
+            // by primary colour text; inactive tabs use the outline (dimmed) colour. Tab state
+            // lives in AuthUiState, not in local remember{}, so it survives configuration changes.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -134,11 +177,17 @@ fun AuthScreenContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Swap tab content based on state. The when is exhaustive over the AuthTab enum so
+            // the compiler will flag any future tab values that are not handled here.
             when (uiState.selectedTab) {
                 AuthTab.NEW_AGENT -> NewAgentTab(uiState = uiState, onEvent = onEvent)
                 AuthTab.IMPORT_TOKEN -> ImportTokenTab(uiState = uiState, onEvent = onEvent)
             }
 
+            // Snackbar is used for error display because errors are transient and non-blocking:
+            // the user can correct their input and retry without dismissing a dialog. Inline
+            // error text was considered but Snackbar better matches the terminal aesthetic and
+            // keeps the form layout stable (no layout shift when an error appears/disappears).
             if (uiState.error != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Snackbar(
@@ -156,14 +205,30 @@ fun AuthScreenContent(
             }
         }
 
+        // ScanlineOverlay draws translucent horizontal lines over the entire screen to simulate
+        // a CRT monitor effect. It is placed last so it renders on top of all content.
         ScanlineOverlay()
     }
 }
 
-// Registration form wrapped in a TerminalCard.
+/**
+ * Registration form tab content, wrapped in a [TerminalCard].
+ *
+ * Renders the callsign field, account token field, faction dropdown, and register button. All
+ * user interactions are forwarded through [onEvent] — this composable holds no business state.
+ *
+ * The faction dropdown's expanded/collapsed state is intentionally held in local `remember` (not
+ * in [AuthUiState]) because it is pure UI mechanics with no business significance — it does not
+ * need to survive configuration changes or be observable by the ViewModel.
+ *
+ * @param uiState Current auth screen state snapshot.
+ * @param onEvent Callback to forward user interactions to the ViewModel.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
+    // Local state for the dropdown's open/closed visual state only. This is an example of state
+    // that is correct to keep local: it has no effect on anything outside this composable.
     var factionExpanded by remember { mutableStateOf(false) }
 
     TerminalCard(title = "Register Agent") {
@@ -185,6 +250,9 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // ExposedDropdownMenuBox is the Material 3 component for a select/picker control.
+        // readOnly = true on the TextField prevents the soft keyboard from opening; the user
+        // interacts with the dropdown exclusively via tap.
         ExposedDropdownMenuBox(
             expanded = factionExpanded,
             onExpandedChange = { factionExpanded = it }
@@ -195,6 +263,8 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
                 readOnly = true,
                 label = "Faction",
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = factionExpanded) },
+                // menuAnchor(PrimaryNotEditable) is required by Material 3's ExposedDropdownMenu
+                // API to correctly associate this TextField as the anchor for the dropdown menu.
                 modifier = Modifier
                     .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                     .fillMaxWidth()
@@ -217,6 +287,9 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // The button is disabled while isRegistering is true to prevent duplicate submissions.
+        // The content switches between a progress indicator and the label text based on the same
+        // flag, giving the user clear visual feedback that the request is in flight.
         TerminalButton(
             onClick = { onEvent(AuthEvent.RegisterClicked) },
             enabled = !uiState.isRegistering,
@@ -231,7 +304,15 @@ private fun NewAgentTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
     }
 }
 
-// Token import form wrapped in a TerminalCard.
+/**
+ * Token import tab content, wrapped in a [TerminalCard].
+ *
+ * Renders a single Bearer Token field and a connect button. Used by players who already have an
+ * agent token from a previous session or from the SpaceTraders web UI.
+ *
+ * @param uiState Current auth screen state snapshot.
+ * @param onEvent Callback to forward user interactions to the ViewModel.
+ */
 @Composable
 private fun ImportTokenTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
     TerminalCard(title = "Import Token") {
@@ -244,6 +325,7 @@ private fun ImportTokenTab(uiState: AuthUiState, onEvent: (AuthEvent) -> Unit) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Mirrors the register button's loading pattern: disable + show progress while in flight.
         TerminalButton(
             onClick = { onEvent(AuthEvent.ImportClicked) },
             enabled = !uiState.isImporting,
