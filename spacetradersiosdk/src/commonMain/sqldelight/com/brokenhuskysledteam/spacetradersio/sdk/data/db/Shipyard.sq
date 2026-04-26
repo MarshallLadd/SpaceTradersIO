@@ -1,0 +1,14 @@
+CREATE TABLE shipyard (
+    symbol TEXT NOT NULL PRIMARY KEY,
+    modifications_fee INTEGER NOT NULL
+);
+
+selectBySymbol:
+SELECT * FROM shipyard WHERE symbol = :symbol;
+
+upsert:
+INSERT OR REPLACE INTO shipyard(symbol, modifications_fee)
+VALUES (:symbol, :modifications_fee);
+
+deleteAll:
+DELETE FROM shipyard;
