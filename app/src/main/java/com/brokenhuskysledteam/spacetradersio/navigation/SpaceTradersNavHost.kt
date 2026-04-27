@@ -10,6 +10,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
+import com.brokenhuskysledteam.spacetradersio.ui.shipyard.ShipyardScreen
 import com.brokenhuskysledteam.spacetradersio.ui.systemmap.SystemMapScreen
 
 /**
@@ -115,8 +116,18 @@ fun SpaceTradersNavHost(
                     navController.navigate(
                         SystemMapRoute(systemSymbol, waypointSymbol, shipSymbol)
                     )
+                },
+                onNavigateToShipyard = { systemSymbol, waypointSymbol ->
+                    navController.navigate(ShipyardRoute(systemSymbol, waypointSymbol))
                 }
             )
+        }
+
+        // --- Shipyard screen ---
+        // Lists ships available for purchase at a specific waypoint.
+        // Navigation Compose deserializes systemSymbol and waypointSymbol from the back-stack entry.
+        composable<ShipyardRoute> {
+            ShipyardScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- System map screen ---
