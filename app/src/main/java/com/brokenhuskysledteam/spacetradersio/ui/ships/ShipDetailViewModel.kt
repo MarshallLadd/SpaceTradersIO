@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -43,6 +46,7 @@ import javax.inject.Inject
 class ShipDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val fleetRepository: FleetRepository,
+    private val systemRepository: SystemRepository,
     private val orbitShipUseCase: OrbitShipUseCase,
     private val dockShipUseCase: DockShipUseCase,
     private val refuelShipUseCase: RefuelShipUseCase
@@ -79,7 +83,8 @@ class ShipDetailViewModel @Inject constructor(
             isLoading = local.isLoading,
             isActionInProgress = local.isActionInProgress,
             actionResult = local.actionResult,
-            error = local.error
+            error = local.error,
+            hasShipyard = local.hasShipyard
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipDetailUiState())
 
@@ -136,6 +141,9 @@ class ShipDetailViewModel @Inject constructor(
             // Navigation is handled by the composable via the onNavigateToSystemMap callback;
             // the ViewModel does not need to act on this event.
             is ShipDetailEvent.ViewSystemClicked -> Unit
+
+            // Navigation to the shipyard is handled by the composable callback.
+            is ShipDetailEvent.ViewShipyardClicked -> Unit
         }
     }
 
@@ -153,6 +161,15 @@ class ShipDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 fleetRepository.refreshMyShip(shipSymbol)
+                val ship = fleetRepository.observeShip(shipSymbol).first()
+                if (ship != null) {
+                    runCatching {
+                        val waypoint = systemRepository.getWaypoint(ship.nav.systemSymbol, ship.nav.waypointSymbol)
+                        _localState.update {
+                            it.copy(hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD })
+                        }
+                    }
+                }
                 _localState.update { it.copy(isLoading = false) }
             } catch (e: Exception) {
                 _localState.update {
@@ -220,7 +237,8 @@ class ShipDetailViewModel @Inject constructor(
         val isLoading: Boolean = false,
         val isActionInProgress: Boolean = false,
         val actionResult: ActionResult? = null,
-        val error: String? = null
+        val error: String? = null,
+        val hasShipyard: Boolean = false
     )
 }
 

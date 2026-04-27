@@ -33,7 +33,8 @@ data class ShipDetailUiState(
     val isLoading: Boolean = true,
     val isActionInProgress: Boolean = false,
     val actionResult: ActionResult? = null,
-    val error: String? = null
+    val error: String? = null,
+    val hasShipyard: Boolean = false
 )
 
 /**
@@ -209,5 +210,10 @@ sealed interface ShipDetailEvent {
         val systemSymbol: String,
         val waypointSymbol: String,
         val shipSymbol: String
+    ) : ShipDetailEvent
+
+    data class ViewShipyardClicked(
+        val systemSymbol: String,
+        val waypointSymbol: String
     ) : ShipDetailEvent
 }

@@ -86,6 +86,11 @@ private class FakeSystemRepository(
         store.putAll(waypoints.associateBy { it.symbol })
         return waypoints
     }
+    override suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): Waypoint =
+        Waypoint(symbol = waypointSymbol, type = WaypointType.MOON, systemSymbol = systemSymbol,
+            x = 0, y = 0, orbits = null, orbitals = emptyList(), traits = emptyList(), isUnderConstruction = false)
+    override fun observeWaypoint(waypointSymbol: String): kotlinx.coroutines.flow.Flow<Waypoint?> =
+        kotlinx.coroutines.flow.flowOf(null)
 }
 
 // In-memory FleetRepository for SystemMapViewModel tests.
