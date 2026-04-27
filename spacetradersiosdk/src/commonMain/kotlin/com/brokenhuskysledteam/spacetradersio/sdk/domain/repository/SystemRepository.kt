@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.repository
 
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Waypoint
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Defines data operations for star systems and their waypoints.
@@ -48,4 +49,8 @@ interface SystemRepository {
      *   if any page request fails.
      */
     suspend fun getSystemWaypoints(systemSymbol: String): List<Waypoint>
+
+    suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): Waypoint
+
+    fun observeWaypoint(waypointSymbol: String): Flow<Waypoint?>
 }

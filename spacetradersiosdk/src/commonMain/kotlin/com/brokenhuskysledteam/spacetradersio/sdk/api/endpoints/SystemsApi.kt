@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.client.SpaceTradersClient
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ApiResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.WaypointDto
 import io.ktor.client.call.body
@@ -60,6 +61,8 @@ interface SystemsApi {
         page: Int = 1,
         limit: Int = 20
     ): PaginatedResponse<WaypointDto>
+
+    suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): WaypointDto
 }
 
 /**
@@ -88,4 +91,9 @@ class SystemsApiImpl(private val client: SpaceTradersClient) : SystemsApi {
             parameter("page", page)
             parameter("limit", limit)
         }.body()
+
+    override suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): WaypointDto =
+        client.authenticated
+            .get("systems/$systemSymbol/waypoints/$waypointSymbol")
+            .body<ApiResponse<WaypointDto>>().data
 }
