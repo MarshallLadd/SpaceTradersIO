@@ -102,3 +102,6 @@ data class SystemMapRoute(
     val focusWaypointSymbol: String? = null,
     val shipSymbol: String? = null
 )
+
+@Serializable
+data class ShipyardRoute(val systemSymbol: String, val waypointSymbol: String)
