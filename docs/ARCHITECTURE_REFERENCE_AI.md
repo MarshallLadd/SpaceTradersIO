@@ -47,6 +47,8 @@ Compose Screen → ViewModel → UseCase → Repository → API → SpaceTraders
 - Use `SharingStarted.Eagerly` (not `WhileSubscribed`) when tests read `.value` directly.
 - Navigation: `Channel<NavigationTarget>(Channel.BUFFERED)`, exposed via `.receiveAsFlow()`. Never `SharedFlow` (re-delivers on re-subscription).
 - Screens: two-layer pattern. Stateful wrapper = hiltViewModel + LaunchedEffect for nav events. Stateless content = pure (state, events) → UI.
+- **LocalState pattern**: When a ViewModel has multiple transient local signals (loading, error, pending dialogs), group them into a single private `data class LocalState(...)` backed by one `MutableStateFlow<LocalState>`. Combine this with repository flows. Fewer flows = simpler `combine()` call; `_localState.update { it.copy(...) }` atomically updates multiple fields.
+- **Non-fatal secondary enrichment**: Use `runCatching { }` when fetching supplementary data that should not block the primary screen. The derived flag (e.g., `hasShipyard`) defaults to `false` if the secondary call fails — the screen remains usable.
 
 **ViewModel skeleton:**
 ```kotlin
@@ -82,6 +84,57 @@ data class FooUiState(val items: List<Foo> = emptyList(), val isLoading: Boolean
 sealed interface FooEvent {
     data class ItemSelected(val id: String) : FooEvent
     data object ErrorDismissed : FooEvent
+}
+```
+
+**LocalState ViewModel variant (multi-field local state + repository Flow):**
+```kotlin
+@HiltViewModel
+class ShipyardViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val shipyardRepository: ShipyardRepository
+) : ViewModel() {
+
+    private val waypointSymbol: String = checkNotNull(savedStateHandle["waypointSymbol"])
+    private val _localState = MutableStateFlow(LocalState())
+
+    val uiState: StateFlow<ShipyardUiState> = combine(
+        shipyardRepository.observeShipyard(waypointSymbol),
+        _localState
+    ) { shipyard, local ->
+        ShipyardUiState(shipyard = shipyard, isRefreshing = local.isRefreshing, error = local.error, ...)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipyardUiState())
+
+    init { refresh() }
+
+    private fun refresh() {
+        _localState.update { it.copy(isRefreshing = true, error = null) }
+        viewModelScope.launch {
+            try { shipyardRepository.refreshShipyard(...) }
+            catch (e: Exception) { _localState.update { it.copy(error = e.message) } }
+            finally { _localState.update { it.copy(isRefreshing = false) } }
+        }
+    }
+
+    // Non-fatal secondary enrichment: failure leaves hasShipyard = false, screen still usable.
+    private fun loadWithEnrichment() {
+        viewModelScope.launch {
+            fleetRepository.refreshMyShip(shipSymbol)
+            val ship = fleetRepository.observeShip(shipSymbol).first()
+            if (ship != null) {
+                runCatching {
+                    val waypoint = systemRepository.getWaypoint(ship.nav.systemSymbol, ship.nav.waypointSymbol)
+                    _localState.update { it.copy(hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD }) }
+                }
+            }
+        }
+    }
+
+    private data class LocalState(
+        val isRefreshing: Boolean = true,
+        val error: String? = null,
+        val pendingAction: SomeType? = null   // any number of local-only fields
+    )
 }
 ```
 
@@ -203,6 +256,38 @@ class ShipRepositoryImpl(
     override suspend fun saveShip(ship: Ship) { database.shipQueries.upsertShip(ship.toEntity()) }
     override suspend fun updateShipNav(symbol: String, nav: ShipNav) { database.shipQueries.updateNav(/* fields */) }
     override suspend fun clearAll() { database.shipQueries.deleteAllShips() }
+}
+```
+
+**Fog-of-war sentinel (nullable List<T> in SQLDelight):**
+
+When a domain model has `val ships: List<T>?` where `null` = fog-of-war and `emptyList()` = no listings, a relational table alone cannot distinguish them — both states produce zero child rows. Add a sentinel column to the parent table:
+
+```sql
+CREATE TABLE shipyard (
+    symbol TEXT NOT NULL PRIMARY KEY,
+    modifications_fee INTEGER NOT NULL,
+    -- 1 = API returned a list (even if empty). 0 = fog-of-war (ships field was absent/null).
+    ships_cached INTEGER NOT NULL DEFAULT 0
+);
+```
+
+In `refreshXxx()`, persist the intent:
+```kotlin
+database.shipyardQueries.upsert(
+    symbol = dto.symbol,
+    modifications_fee = dto.modificationsFee.toLong(),
+    ships_cached = if (dto.ships != null) 1L else 0L
+)
+```
+
+In `observeXxx()`, restore it:
+```kotlin
+combine(
+    database.shipyardQueries.selectBySymbol(waypointSymbol).asFlow().mapToOneOrNull(Dispatchers.Default),
+    database.shipyardShipQueries.selectByWaypoint(waypointSymbol).asFlow().mapToList(Dispatchers.Default)
+) { meta, ships ->
+    meta?.toDomain(if (meta.ships_cached == 1L) ships.map { it.toDomain() } else null)
 }
 ```
 
@@ -328,6 +413,7 @@ class FooApiImpl(private val client: SpaceTradersClient) : FooApi {
 - `SpaceTradersDatabase` is a singleton: `SqlDriverFactory(@ApplicationContext context).create()` — one DB for the app lifetime.
 - `AgentRepository` is singleton because it only depends on `AgentsApi` + `SpaceTradersDatabase` (both singletons).
 - `FleetRepository` is **unscoped** because it depends on `RefreshScheduler` (session-scoped). Same for use cases that touch session state.
+- A repository that depends on another **unscoped** (session-dependent) repository must itself be unscoped — even if it has no direct session dep. Example: `ShipyardRepository` depends on `FleetRepository` and `AgentRepository` (both unscoped), so it too is unscoped. Making it `@Singleton` would hold stale session references across login/logout.
 - Unscoped: session-dependent scheduler + state stores — delegate to `sm.requireSession().xxxStore`.
 - `@HiltViewModel` on every ViewModel. `@AndroidEntryPoint` on `MainActivity`. `@HiltAndroidApp` on `Application`.
 
@@ -462,3 +548,6 @@ class FooViewModelTest {
 | `@Volatile` in `commonMain` | `import kotlin.concurrent.Volatile`. `synchronized {}` is JVM-only. |
 | `Dispatchers.IO` in `commonMain` | Not available — iOS has no IO dispatcher. Use `Dispatchers.Default` for SQLDelight `asFlow().mapToList/mapToOneOrNull(Dispatchers.Default)`. |
 | Fake repository init in tests | Start `MutableStateFlow` **empty** (`emptyMap()`). Populate only inside `refreshXxx()`. Pre-populating skips the load path and breaks error-state assertions. |
+| Cross-module smart cast | Kotlin cannot smart-cast a public property from another module. Capture in a `val` first: `val ships = shipyard.ships; if (ships != null) { items(ships) { ... } }`. |
+| `combine` + single `update` timing in tests | A single `_localState.update {}` schedules a combine re-emission on the test dispatcher — it does NOT execute synchronously. Call `testDispatcher.scheduler.advanceUntilIdle()` after each state-changing `onEvent()` before reading `uiState.value`. Two consecutive updates before an advance coalesce (only the final state emits). |
+| Fog-of-war nullable list in SQLDelight | A table cannot distinguish "no rows = null" from "no rows = empty list". Add a sentinel column (`ships_cached INTEGER`) and set it to `1` when the API returned a list, `0` for fog-of-war. Read it in the observe flow to decide `null` vs mapped list. |
