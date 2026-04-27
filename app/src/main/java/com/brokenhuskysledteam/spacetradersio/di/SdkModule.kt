@@ -8,15 +8,19 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SqlDriverFactory
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.AgentRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ShipyardRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ShipyardRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
@@ -212,6 +216,11 @@ object SdkModule {
     fun provideSystemsApi(client: SpaceTradersClient): SystemsApi =
         SystemsApiImpl(client)
 
+    @Provides
+    @Singleton
+    fun provideShipyardApi(client: SpaceTradersClient): ShipyardApi =
+        ShipyardApiImpl(client)
+
     // -----------------------------------------------------------------------------------------
     // Session-Scoped State (Unscoped — delegates to current session on each injection)
     // -----------------------------------------------------------------------------------------
@@ -307,6 +316,14 @@ object SdkModule {
         systemsApi: SystemsApi,
         waypointStateStore: WaypointStateStore
     ): SystemRepository = SystemRepositoryImpl(systemsApi, waypointStateStore)
+
+    @Provides
+    fun provideShipyardRepository(
+        shipyardApi: ShipyardApi,
+        fleetRepository: FleetRepository,
+        agentRepository: AgentRepository,
+        database: SpaceTradersDatabase
+    ): ShipyardRepository = ShipyardRepositoryImpl(shipyardApi, fleetRepository, agentRepository, database)
 
     // -----------------------------------------------------------------------------------------
     // Use Cases

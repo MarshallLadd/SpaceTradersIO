@@ -204,6 +204,83 @@ class BarViewModel @Inject constructor(
 > ⚠️ **Gotcha — `SharingStarted.WhileSubscribed` + `StandardTestDispatcher`:**
 > `WhileSubscribed(5000)` keeps the flow alive 5 seconds after the last collector disappears, which is great for production (avoids recomputing on quick back-navigations). But in unit tests with `StandardTestDispatcher`, there is no active subscriber when you read `.value` directly — the upstream `combine` never fires and `.value` stays at its initial value. Use `SharingStarted.Eagerly` in ViewModels when tests need to read `.value` directly.
 
+> ⚠️ **Gotcha — `combine` + single `_localState.update()` timing in tests:**
+> Even with `SharingStarted.Eagerly`, a `_localState.update { }` call schedules a re-emission through `combine` on the test dispatcher — it does NOT execute synchronously. Reading `uiState.value` immediately after `onEvent()` (without `advanceUntilIdle()`) returns the stale value. Always call `testDispatcher.scheduler.advanceUntilIdle()` after each state-changing event before asserting on `uiState.value`. There is one subtle exception: two *consecutive* state updates before an advance coalesce into a single emission — only the final state propagates. This means a test that fires two back-to-back events (e.g., `PurchaseShipClicked` then `PurchaseDismissed`) and then asserts `pendingPurchase == null` will pass even without an intermediate advance, because the combine only ever sees the final null state.
+
+### LocalState Private Data Class Pattern
+
+When a ViewModel has several transient local signals (a refreshing flag, error message, a pending dialog object, an in-progress flag), grouping them into a single private `data class LocalState(...)` is cleaner than maintaining separate `MutableStateFlow<Boolean>`, `MutableStateFlow<String?>`, etc. One `MutableStateFlow<LocalState>` replaces N flows:
+
+- The `combine()` call only needs two arguments: the repository flow and `_localState`.
+- `_localState.update { it.copy(...) }` atomically updates multiple fields in a single emission.
+- `LocalState` is a private implementation detail — callers never see it.
+
+```kotlin
+@HiltViewModel
+class ShipyardViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val shipyardRepository: ShipyardRepository
+) : ViewModel() {
+
+    private val waypointSymbol: String = checkNotNull(savedStateHandle["waypointSymbol"])
+
+    // One flow for all local-only state instead of separate isRefreshing, error, etc. flows
+    private val _localState = MutableStateFlow(LocalState())
+
+    val uiState: StateFlow<ShipyardUiState> = combine(
+        shipyardRepository.observeShipyard(waypointSymbol),
+        _localState
+    ) { shipyard, local ->
+        ShipyardUiState(
+            shipyard = shipyard,
+            isRefreshing = local.isRefreshing,
+            isPurchasing = local.isPurchasing,
+            pendingPurchase = local.pendingPurchase,
+            error = local.error
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipyardUiState())
+
+    private data class LocalState(
+        val isRefreshing: Boolean = true,
+        val isPurchasing: Boolean = false,
+        val pendingPurchase: ShipyardShip? = null,
+        val error: String? = null
+    )
+}
+```
+
+Use the simple `MutableStateFlow` pattern when state is self-contained in the ViewModel. Use the `LocalState` + `combine` pattern when state is derived from a repository `Flow` plus local signals.
+
+### Non-Fatal Secondary Enrichment (`runCatching`)
+
+Some screens need supplementary data that is *nice to have* but should not block the primary content if it fails. The pattern is `runCatching { }` inside a `viewModelScope.launch { }` block, after the primary load succeeds:
+
+```kotlin
+private fun loadShip() {
+    _localState.update { it.copy(isLoading = true) }
+    viewModelScope.launch {
+        try {
+            fleetRepository.refreshMyShip(shipSymbol)
+            val ship = fleetRepository.observeShip(shipSymbol).first()
+            if (ship != null) {
+                // Non-fatal: if this fails, hasShipyard stays false and the screen still works.
+                runCatching {
+                    val waypoint = systemRepository.getWaypoint(ship.nav.systemSymbol, ship.nav.waypointSymbol)
+                    _localState.update {
+                        it.copy(hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD })
+                    }
+                }
+            }
+            _localState.update { it.copy(isLoading = false) }
+        } catch (e: Exception) {
+            _localState.update { it.copy(isLoading = false, error = e.message) }
+        }
+    }
+}
+```
+
+The outer `try/catch` is fatal — a failure there means the primary data could not load. The inner `runCatching` is non-fatal — a failure leaves the derived flag at its safe default (`false`) and does not propagate to the error state. This pattern avoids a two-step loading UI while still making the enrichment best-effort.
+
 ### Two-Layer Screen Pattern
 
 Every screen is two composables:
@@ -379,6 +456,76 @@ REST API → DTO (api/dto/) → Mapper (api/mapper/) → Domain Model (domain/mo
 **Two persistence paths:**
 - **Ships + agents** use SQLDelight as the single source of truth. Repository impls write via `database.shipQueries.upsertShip(...)` and expose `Flow<List<Ship>>` / `Flow<Ship?>` via `asFlow().mapToList/mapToOneOrNull(Dispatchers.Default)`. ViewModels combine these Flows with local loading/error signals.
 - **Waypoints** remain in-memory (`WaypointStateStore`, an `EntityStateStore<String, Waypoint>`). They are session-scoped, do not need to survive process death, and benefit from the simpler in-memory pattern.
+
+### Fog-of-War with Nullable Lists
+
+Some API resources have a **fog-of-war** behaviour: the server returns metadata for a location even when no ship is present, but withholds the detail list unless a ship is docked or in orbit there. The shipyard is the canonical example — `GET /systems/:system/waypoints/:waypoint/shipyard` always returns the waypoint's `symbol` and `modificationsFee`, but only includes the `ships` array when a player's ship is physically there.
+
+**The problem with SQL:** A relational table cannot distinguish between "this row exists but the list is empty" and "the list was never fetched." An absent row means *not cached at all*; a row with zero child rows means *cached and empty*. There is no native way to express "cached, but the detail was fog-of-war."
+
+**The solution — sentinel column:** Add a `ships_cached INTEGER NOT NULL DEFAULT 0` column to the parent table. `0` = fog-of-war (the API returned metadata but omitted the detail list); `1` = the list was present in the last response (even if it was empty). The schema:
+
+```sql
+-- Shipyard.sq
+CREATE TABLE shipyard (
+    symbol            TEXT    NOT NULL PRIMARY KEY,
+    modifications_fee INTEGER NOT NULL,
+    ships_cached      INTEGER NOT NULL DEFAULT 0   -- 0 = fog-of-war, 1 = detail fetched
+);
+
+upsertWithShips:
+INSERT OR REPLACE INTO shipyard(symbol, modifications_fee, ships_cached)
+VALUES (:symbol, :modifications_fee, :ships_cached);
+```
+
+The repository then uses the sentinel to decide whether to pass `null` or the child rows to the domain mapper:
+
+```kotlin
+// data/repository/ShipyardRepositoryImpl.kt
+override fun observeShipyard(waypointSymbol: String): Flow<Shipyard?> =
+    combine(
+        database.shipyardQueries.selectBySymbol(waypointSymbol)
+            .asFlow().mapToOneOrNull(Dispatchers.Default),
+        database.shipyardShipQueries.selectByWaypoint(waypointSymbol)
+            .asFlow().mapToList(Dispatchers.Default)
+    ) { meta, ships ->
+        // null meta → nothing cached yet (caller decides how to handle)
+        // meta.ships_cached == 0 → fog-of-war: pass null as the ships list
+        // meta.ships_cached == 1 → detail present: pass the child rows
+        meta?.toDomain(if (meta.ships_cached == 1L) ships.map { it.toDomain() } else null)
+    }
+
+override suspend fun refreshShipyard(systemSymbol: String, waypointSymbol: String) {
+    val dto = shipyardApi.getShipyard(systemSymbol, waypointSymbol)
+    database.transaction {
+        database.shipyardQueries.upsertWithShips(
+            symbol = dto.symbol,
+            modifications_fee = dto.modificationsFee.toLong(),
+            ships_cached = if (dto.ships != null) 1L else 0L
+        )
+        // Only touch the child table when the detail was actually returned.
+        // Leaving old rows in place during fog-of-war preserves the last-known listings.
+        if (dto.ships != null) {
+            database.shipyardShipQueries.deleteByWaypoint(waypointSymbol)
+            dto.ships.forEach { ship ->
+                database.shipyardShipQueries.upsert(waypoint_symbol = waypointSymbol, ship = ship.toDomain())
+            }
+        }
+    }
+}
+```
+
+The domain model reflects this contract explicitly:
+
+```kotlin
+data class Shipyard(
+    val symbol: String,
+    val modificationsFee: Int,
+    val ships: List<ShipyardShip>?   // null = fog-of-war; emptyList() = present, none for sale
+)
+```
+
+The UI then renders three distinct states: loading spinner (no metadata yet), amber "ship must be present" warning (fog-of-war, `ships == null`), and the actual listings (`ships != null`). The three-state domain model drives the three-branch `when` in the screen composable without any extra flags.
 
 ### DTO + Mapper + Domain Model
 
@@ -827,6 +974,33 @@ object SdkModule {
     ): NavigateFooUseCase = NavigateFooUseCaseImpl(api, repo, prepareUseCase)
 }
 ```
+
+### Unscoped Transitive Dependencies
+
+A repository should be unscoped not only when it *directly* holds session state, but also when any of its constructor dependencies are themselves unscoped. This is the **transitive dependency rule**: scope propagates upward through the dependency graph.
+
+`ShipyardRepository` is the canonical example. It does not itself hold a `RefreshScheduler` or a `WaypointStateStore`. But it depends on `FleetRepository` and `AgentRepository` — and `FleetRepository` is unscoped because *it* holds a `RefreshScheduler`. Making `ShipyardRepository` a `@Singleton` while its transitive dependencies are unscoped would cause Hilt to inject the session-scoped `FleetRepository` at app-startup time, capture it in the singleton, and then serve that same (now-stale) instance after logout and re-login:
+
+```kotlin
+// ✅ Correct — unscoped because FleetRepository and AgentRepository are unscoped
+@Provides
+fun provideShipyardRepository(
+    shipyardApi: ShipyardApi,
+    fleetRepository: FleetRepository,    // unscoped (session-scoped)
+    agentRepository: AgentRepository,    // @Singleton — AgentRepository is safe to be singleton
+    database: SpaceTradersDatabase       // @Singleton
+): ShipyardRepository =
+    ShipyardRepositoryImpl(shipyardApi, fleetRepository, agentRepository, database)
+
+// ❌ Wrong — would hold a stale FleetRepository after logout
+@Provides @Singleton
+fun provideShipyardRepository(...): ShipyardRepository = ...
+```
+
+**The heuristic:** When adding a new repository, trace its constructor arguments. If any argument is unscoped (session-scoped), the repository itself must be unscoped too. The only safe way to make a repository `@Singleton` is if every transitive dependency is also `@Singleton`.
+
+> ⚠️ **Gotcha — `@Singleton` capturing an unscoped transitive dep:**
+> The compiler will not warn about this. Hilt happily injects an unscoped `FleetRepository` into a `@Singleton` `ShipyardRepository` at the moment of first use. The bug surfaces only after the user logs out and back in — the singleton still holds the `RefreshScheduler` from the old session, timers fire against the wrong DB state, and new refreshes are silently lost.
 
 ### Application and Activity Setup
 

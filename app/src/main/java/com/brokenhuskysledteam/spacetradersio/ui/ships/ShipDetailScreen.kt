@@ -54,13 +54,15 @@ import kotlin.time.ExperimentalTime
 @Composable
 fun ShipDetailScreen(
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
+    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     ShipDetailScreenContent(
         uiState = uiState,
         onEvent = viewModel::onEvent,
-        onNavigateToSystemMap = onNavigateToSystemMap
+        onNavigateToSystemMap = onNavigateToSystemMap,
+        onNavigateToShipyard = onNavigateToShipyard
     )
 }
 
@@ -88,7 +90,8 @@ fun ShipDetailScreen(
 fun ShipDetailScreenContent(
     uiState: ShipDetailUiState,
     onEvent: (ShipDetailEvent) -> Unit,
-    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> }
+    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> }
 ) {
     Box(
         modifier = Modifier
@@ -144,7 +147,15 @@ fun ShipDetailScreenContent(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     // Navigation card
-                    NavigationCard(ship = ship, onNavigateToSystemMap = onNavigateToSystemMap)
+                    NavigationCard(
+                        ship = ship,
+                        hasShipyard = uiState.hasShipyard,
+                        onNavigateToSystemMap = onNavigateToSystemMap,
+                        onNavigateToShipyard = { systemSymbol, waypointSymbol ->
+                            onEvent(ShipDetailEvent.ViewShipyardClicked(systemSymbol, waypointSymbol))
+                            onNavigateToShipyard(systemSymbol, waypointSymbol)
+                        }
+                    )
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Fuel card
@@ -230,7 +241,9 @@ fun ShipDetailScreenContent(
 @Composable
 private fun NavigationCard(
     ship: ShipDetail,
-    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit
+    hasShipyard: Boolean,
+    onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
+    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit
 ) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
@@ -270,6 +283,14 @@ private fun NavigationCard(
                 },
                 modifier = Modifier.fillMaxWidth()
             )
+            if (hasShipyard) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TerminalButton(
+                    text = "VIEW SHIPYARD",
+                    onClick = { onNavigateToShipyard(ship.systemSymbol, ship.waypointSymbol) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }

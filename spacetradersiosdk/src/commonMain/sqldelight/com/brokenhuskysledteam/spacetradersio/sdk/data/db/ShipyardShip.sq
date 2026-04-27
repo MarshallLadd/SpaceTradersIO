@@ -1,0 +1,33 @@
+CREATE TABLE shipyard_ship (
+    waypoint_symbol      TEXT    NOT NULL,
+    ship_type            TEXT    NOT NULL,
+    name                 TEXT    NOT NULL,
+    description          TEXT    NOT NULL,
+    purchase_price       INTEGER NOT NULL,
+    supply               TEXT    NOT NULL,
+    frame_name           TEXT    NOT NULL,
+    engine_speed         INTEGER NOT NULL,
+    reactor_power_output INTEGER NOT NULL,
+    crew_required        INTEGER NOT NULL,
+    crew_capacity        INTEGER NOT NULL,
+    PRIMARY KEY (waypoint_symbol, ship_type)
+);
+
+selectByWaypoint:
+SELECT * FROM shipyard_ship WHERE waypoint_symbol = :waypoint_symbol;
+
+upsert:
+INSERT OR REPLACE INTO shipyard_ship(
+    waypoint_symbol, ship_type, name, description, purchase_price, supply,
+    frame_name, engine_speed, reactor_power_output, crew_required, crew_capacity
+)
+VALUES (
+    :waypoint_symbol, :ship_type, :name, :description, :purchase_price, :supply,
+    :frame_name, :engine_speed, :reactor_power_output, :crew_required, :crew_capacity
+);
+
+deleteByWaypoint:
+DELETE FROM shipyard_ship WHERE waypoint_symbol = :waypoint_symbol;
+
+deleteAll:
+DELETE FROM shipyard_ship;

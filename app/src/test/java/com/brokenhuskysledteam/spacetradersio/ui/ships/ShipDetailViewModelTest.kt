@@ -15,7 +15,11 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlig
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Waypoint
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.WaypointTrait
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
@@ -23,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -38,6 +43,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 private val NOW = Instant.parse("2025-06-01T10:00:00.000Z")
@@ -125,6 +131,19 @@ private class FakeDockUseCase(
     }
 }
 
+private class FakeSystemRepository(
+    private val traits: List<WaypointTrait> = emptyList()
+) : SystemRepository {
+    override suspend fun getSystemWaypoints(systemSymbol: String): List<Waypoint> = emptyList()
+    override suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): Waypoint =
+        Waypoint(
+            symbol = waypointSymbol, type = WaypointType.MOON, systemSymbol = systemSymbol,
+            x = 0, y = 0, orbits = null, orbitals = emptyList(),
+            traits = traits, isUnderConstruction = false
+        )
+    override fun observeWaypoint(waypointSymbol: String): Flow<Waypoint?> = flowOf(null)
+}
+
 private class FakeRefuelUseCase(
     private val repo: FakeDetailFleetRepository,
     private val result: RefuelResult = RefuelResult(
@@ -165,12 +184,14 @@ class ShipDetailViewModelTest {
 
     private fun createViewModel(
         shipSymbol: String = "LADD-1",
+        systemRepository: SystemRepository = FakeSystemRepository(),
         orbitUseCase: OrbitShipUseCase = FakeOrbitUseCase(repository),
         dockUseCase: DockShipUseCase = FakeDockUseCase(repository),
         refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase(repository)
     ) = ShipDetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to shipSymbol)),
         fleetRepository = repository,
+        systemRepository = systemRepository,
         orbitShipUseCase = orbitUseCase,
         dockShipUseCase = dockUseCase,
         refuelShipUseCase = refuelUseCase
@@ -250,6 +271,7 @@ class ShipDetailViewModelTest {
         val viewModel = ShipDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to "LADD-X")),
             fleetRepository = errorRepo,
+            systemRepository = FakeSystemRepository(),
             orbitShipUseCase = FakeOrbitUseCase(errorRepo),
             dockShipUseCase = FakeDockUseCase(errorRepo),
             refuelShipUseCase = FakeRefuelUseCase(errorRepo)
@@ -401,5 +423,36 @@ class ShipDetailViewModelTest {
         viewModel.onEvent(ShipDetailEvent.ActionResultDismissed)
         testDispatcher.scheduler.advanceUntilIdle()
         assertNull(viewModel.uiState.value.actionResult)
+    }
+
+    // ── hasShipyard ───────────────────────────────────────────────────────────
+
+    @Test
+    fun hasShipyard_waypointHasShipyardTrait_isTrue() = runTest {
+        val viewModel = createViewModel(
+            systemRepository = FakeSystemRepository(
+                traits = listOf(WaypointTrait(WaypointTraitSymbol.SHIPYARD, "Shipyard", "Buy ships here."))
+            )
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.hasShipyard)
+    }
+
+    @Test
+    fun hasShipyard_waypointHasNoShipyardTrait_isFalse() = runTest {
+        val viewModel = createViewModel(systemRepository = FakeSystemRepository(traits = emptyList()))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.hasShipyard)
+    }
+
+    @Test
+    fun onEvent_viewShipyardClicked_isNoOpInViewModel() = runTest {
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val stateBefore = viewModel.uiState.value
+        viewModel.onEvent(ShipDetailEvent.ViewShipyardClicked("X1-DF55", "X1-DF55-20250Z"))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(stateBefore.ship, viewModel.uiState.value.ship)
+        assertEquals(stateBefore.hasShipyard, viewModel.uiState.value.hasShipyard)
     }
 }

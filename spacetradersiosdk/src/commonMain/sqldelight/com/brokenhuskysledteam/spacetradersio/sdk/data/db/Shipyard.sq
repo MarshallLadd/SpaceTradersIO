@@ -1,0 +1,16 @@
+CREATE TABLE shipyard (
+    symbol TEXT NOT NULL PRIMARY KEY,
+    modifications_fee INTEGER NOT NULL,
+    -- 1 = ship listings were returned (ships may be empty); 0 = fog of war (no ship present)
+    ships_cached INTEGER NOT NULL DEFAULT 0
+);
+
+selectBySymbol:
+SELECT * FROM shipyard WHERE symbol = :symbol;
+
+upsert:
+INSERT OR REPLACE INTO shipyard(symbol, modifications_fee, ships_cached)
+VALUES (:symbol, :modifications_fee, :ships_cached);
+
+deleteAll:
+DELETE FROM shipyard;

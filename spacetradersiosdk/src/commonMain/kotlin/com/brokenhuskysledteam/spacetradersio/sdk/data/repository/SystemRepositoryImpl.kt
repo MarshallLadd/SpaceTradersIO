@@ -5,6 +5,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Waypoint
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Concrete implementation of [SystemRepository] that fetches waypoints for a star
@@ -46,6 +47,15 @@ class SystemRepositoryImpl(
      *                     should be fetched.
      * @return The complete list of [Waypoint]s in the system.
      */
+    override suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): Waypoint {
+        val domain = systemsApi.getWaypoint(systemSymbol, waypointSymbol).toDomain()
+        waypointStateStore.put(waypointSymbol, domain)
+        return domain
+    }
+
+    override fun observeWaypoint(waypointSymbol: String): Flow<Waypoint?> =
+        waypointStateStore.observe(waypointSymbol)
+
     override suspend fun getSystemWaypoints(systemSymbol: String): List<Waypoint> {
         val allWaypoints = fetchAllPages(systemSymbol)
         // Write all waypoints atomically so observers see the full set at once,

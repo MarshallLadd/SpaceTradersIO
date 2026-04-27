@@ -153,4 +153,7 @@ private class FakeSystemsApi(
         requestedPages.add(page)
         return pages[page] ?: PaginatedResponse(emptyList(), MetaDto(total = 0, page = page, limit = limit))
     }
+
+    override suspend fun getWaypoint(systemSymbol: String, waypointSymbol: String): WaypointDto =
+        WaypointDto(symbol = waypointSymbol, type = "MOON", systemSymbol = systemSymbol, x = 0, y = 0)
 }
