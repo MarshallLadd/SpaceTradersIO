@@ -27,7 +27,7 @@ class ShipyardDbMapperTest {
     @Test
     fun upsertAndRead_roundTripsAllFields() = runTest {
         val db = createTestDatabase()
-        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 1000L)
+        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 1000L, ships_cached = 1L)
         db.shipyardShipQueries.upsert(waypoint_symbol = "X1-DF55-20250Z", ship = aShipyardShip)
         val dbRow = db.shipyardShipQueries.selectByWaypoint("X1-DF55-20250Z").executeAsList().first()
         val domain = dbRow.toDomain()
@@ -45,7 +45,7 @@ class ShipyardDbMapperTest {
     @Test
     fun dbShipyard_withShips_toDomain_populatesList() = runTest {
         val db = createTestDatabase()
-        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 500L)
+        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 500L, ships_cached = 1L)
         db.shipyardShipQueries.upsert(waypoint_symbol = "X1-DF55-20250Z", ship = aShipyardShip)
 
         val meta = db.shipyardQueries.selectBySymbol("X1-DF55-20250Z").executeAsOneOrNull()!!
@@ -61,7 +61,7 @@ class ShipyardDbMapperTest {
     @Test
     fun dbShipyard_emptyShips_toDomain_emptyList() = runTest {
         val db = createTestDatabase()
-        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 500L)
+        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 500L, ships_cached = 1L)
         val meta = db.shipyardQueries.selectBySymbol("X1-DF55-20250Z").executeAsOneOrNull()!!
         val domain = meta.toDomain(emptyList())
         assertEquals(emptyList(), domain.ships)
@@ -70,7 +70,7 @@ class ShipyardDbMapperTest {
     @Test
     fun dbShipyard_nullShips_toDomain_fogOfWar() = runTest {
         val db = createTestDatabase()
-        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 500L)
+        db.shipyardQueries.upsert(symbol = "X1-DF55-20250Z", modifications_fee = 500L, ships_cached = 0L)
         val meta = db.shipyardQueries.selectBySymbol("X1-DF55-20250Z").executeAsOneOrNull()!!
         val domain = meta.toDomain(null)
         assertNull(domain.ships)
