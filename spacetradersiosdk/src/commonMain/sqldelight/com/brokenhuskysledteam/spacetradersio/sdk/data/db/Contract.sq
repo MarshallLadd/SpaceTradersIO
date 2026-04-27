@@ -1,0 +1,51 @@
+CREATE TABLE contract (
+    id                   TEXT    NOT NULL PRIMARY KEY,
+    faction_symbol       TEXT    NOT NULL,
+    type                 TEXT    NOT NULL,
+    accepted             INTEGER NOT NULL,
+    fulfilled            INTEGER NOT NULL,
+    deadline_to_accept   TEXT,
+    terms_deadline       TEXT    NOT NULL,
+    payment_on_accepted  INTEGER NOT NULL,
+    payment_on_fulfilled INTEGER NOT NULL,
+    -- status stored as TEXT so tab queries use simple WHERE clauses, not date math
+    status               TEXT    NOT NULL
+);
+
+selectActiveTab:
+SELECT * FROM contract
+WHERE status = 'UNACCEPTED' OR status = 'ACTIVE'
+ORDER BY terms_deadline ASC
+LIMIT :limit OFFSET :offset;
+
+selectHistoryTab:
+SELECT * FROM contract
+WHERE status = 'FULFILLED' OR status = 'FAILED' OR status = 'EXPIRED'
+ORDER BY terms_deadline DESC
+LIMIT :limit OFFSET :offset;
+
+countActiveTab:
+SELECT COUNT(*) FROM contract
+WHERE status = 'UNACCEPTED' OR status = 'ACTIVE';
+
+countHistoryTab:
+SELECT COUNT(*) FROM contract
+WHERE status = 'FULFILLED' OR status = 'FAILED' OR status = 'EXPIRED';
+
+upsert:
+INSERT OR REPLACE INTO contract(
+    id, faction_symbol, type, accepted, fulfilled,
+    deadline_to_accept, terms_deadline,
+    payment_on_accepted, payment_on_fulfilled, status
+)
+VALUES (
+    :id, :faction_symbol, :type, :accepted, :fulfilled,
+    :deadline_to_accept, :terms_deadline,
+    :payment_on_accepted, :payment_on_fulfilled, :status
+);
+
+selectById:
+SELECT * FROM contract WHERE id = :id;
+
+deleteAll:
+DELETE FROM contract;

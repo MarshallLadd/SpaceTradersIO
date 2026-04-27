@@ -1,0 +1,23 @@
+CREATE TABLE contract_deliver_good (
+    contract_id          TEXT    NOT NULL,
+    trade_symbol         TEXT    NOT NULL,
+    destination_symbol   TEXT    NOT NULL,
+    units_required       INTEGER NOT NULL,
+    units_fulfilled      INTEGER NOT NULL,
+    PRIMARY KEY (contract_id, trade_symbol)
+);
+
+selectByContractId:
+SELECT * FROM contract_deliver_good WHERE contract_id = :contract_id;
+
+upsert:
+INSERT OR REPLACE INTO contract_deliver_good(
+    contract_id, trade_symbol, destination_symbol, units_required, units_fulfilled
+)
+VALUES (:contract_id, :trade_symbol, :destination_symbol, :units_required, :units_fulfilled);
+
+deleteByContractId:
+DELETE FROM contract_deliver_good WHERE contract_id = :contract_id;
+
+deleteAll:
+DELETE FROM contract_deliver_good;
