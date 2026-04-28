@@ -3,12 +3,18 @@ package com.brokenhuskysledteam.spacetradersio.ui.ships
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Contract
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractDeliverGood
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractTab
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NegotiateContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,7 +55,10 @@ class ShipDetailViewModel @Inject constructor(
     private val systemRepository: SystemRepository,
     private val orbitShipUseCase: OrbitShipUseCase,
     private val dockShipUseCase: DockShipUseCase,
-    private val refuelShipUseCase: RefuelShipUseCase
+    private val refuelShipUseCase: RefuelShipUseCase,
+    private val contractRepository: ContractRepository,
+    private val negotiateContractUseCase: NegotiateContractUseCase,
+    private val deliverCargoUseCase: DeliverCargoUseCase
 ) : ViewModel() {
 
     /** Ship identifier extracted from the navigation back-stack; never null. */
@@ -84,7 +93,13 @@ class ShipDetailViewModel @Inject constructor(
             isActionInProgress = local.isActionInProgress,
             actionResult = local.actionResult,
             error = local.error,
-            hasShipyard = local.hasShipyard
+            hasShipyard = local.hasShipyard,
+            pendingNegotiate = local.pendingNegotiate,
+            activeContracts = local.activeContracts,
+            isDeliverDialogOpen = local.isDeliverDialogOpen,
+            selectedDeliverContract = local.selectedDeliverContract,
+            selectedDeliverGood = local.selectedDeliverGood,
+            deliverUnits = local.deliverUnits
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ShipDetailUiState())
 
@@ -144,6 +159,75 @@ class ShipDetailViewModel @Inject constructor(
 
             // Navigation to the shipyard is handled by the composable callback.
             is ShipDetailEvent.ViewShipyardClicked -> Unit
+
+            is ShipDetailEvent.NegotiateContractClicked ->
+                _localState.update { it.copy(pendingNegotiate = true) }
+
+            is ShipDetailEvent.NegotiateDismissed ->
+                _localState.update { it.copy(pendingNegotiate = false) }
+
+            is ShipDetailEvent.NegotiateConfirmed -> performAction {
+                val contract = negotiateContractUseCase(shipSymbol)
+                _localState.update {
+                    it.copy(
+                        pendingNegotiate = false,
+                        actionResult = ActionResult.NegotiatedContract(
+                            contractId = contract.id,
+                            type = contract.type.name,
+                            upfrontPayment = contract.terms.paymentOnAccepted
+                        )
+                    )
+                }
+            }
+
+            is ShipDetailEvent.DeliverCargoClicked -> viewModelScope.launch {
+                val contracts = contractRepository.observeContracts(
+                    ContractTab.ACTIVE, limit = 20L, offset = 0L
+                ).first()
+                _localState.update {
+                    it.copy(
+                        isDeliverDialogOpen = true,
+                        activeContracts = contracts,
+                        selectedDeliverContract = null,
+                        selectedDeliverGood = null,
+                        deliverUnits = ""
+                    )
+                }
+            }
+
+            is ShipDetailEvent.DeliverContractSelected ->
+                _localState.update {
+                    it.copy(selectedDeliverContract = event.contract, selectedDeliverGood = null)
+                }
+
+            is ShipDetailEvent.DeliverGoodSelected ->
+                _localState.update { it.copy(selectedDeliverGood = event.good) }
+
+            is ShipDetailEvent.DeliverUnitsChanged ->
+                _localState.update { it.copy(deliverUnits = event.units) }
+
+            is ShipDetailEvent.DeliverDismissed ->
+                _localState.update { it.copy(isDeliverDialogOpen = false) }
+
+            is ShipDetailEvent.DeliverConfirmed -> {
+                val contract = _localState.value.selectedDeliverContract ?: return
+                val good = _localState.value.selectedDeliverGood ?: return
+                val units = _localState.value.deliverUnits.toIntOrNull() ?: return
+                performAction {
+                    val updated = deliverCargoUseCase(contract.id, shipSymbol, good.tradeSymbol, units)
+                    val updatedGood = updated.terms.deliverGoods.first { it.tradeSymbol == good.tradeSymbol }
+                    _localState.update {
+                        it.copy(
+                            isDeliverDialogOpen = false,
+                            actionResult = ActionResult.DeliveredCargo(
+                                tradeSymbol = good.tradeSymbol,
+                                unitsFulfilled = updatedGood.unitsFulfilled,
+                                unitsRequired = updatedGood.unitsRequired
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -238,7 +322,13 @@ class ShipDetailViewModel @Inject constructor(
         val isActionInProgress: Boolean = false,
         val actionResult: ActionResult? = null,
         val error: String? = null,
-        val hasShipyard: Boolean = false
+        val hasShipyard: Boolean = false,
+        val pendingNegotiate: Boolean = false,
+        val activeContracts: List<Contract> = emptyList(),
+        val isDeliverDialogOpen: Boolean = false,
+        val selectedDeliverContract: Contract? = null,
+        val selectedDeliverGood: ContractDeliverGood? = null,
+        val deliverUnits: String = ""
     )
 }
 

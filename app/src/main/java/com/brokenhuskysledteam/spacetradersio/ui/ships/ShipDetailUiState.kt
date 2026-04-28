@@ -1,5 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.ui.ships
 
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Contract
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractDeliverGood
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlightMode
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
@@ -34,7 +36,13 @@ data class ShipDetailUiState(
     val isActionInProgress: Boolean = false,
     val actionResult: ActionResult? = null,
     val error: String? = null,
-    val hasShipyard: Boolean = false
+    val hasShipyard: Boolean = false,
+    val pendingNegotiate: Boolean = false,
+    val activeContracts: List<Contract> = emptyList(),
+    val isDeliverDialogOpen: Boolean = false,
+    val selectedDeliverContract: Contract? = null,
+    val selectedDeliverGood: ContractDeliverGood? = null,
+    val deliverUnits: String = ""
 )
 
 /**
@@ -149,6 +157,18 @@ sealed interface ActionResult {
         val totalCost: Int,
         val newCredits: Long
     ) : ActionResult
+
+    data class NegotiatedContract(
+        val contractId: String,
+        val type: String,
+        val upfrontPayment: Int
+    ) : ActionResult
+
+    data class DeliveredCargo(
+        val tradeSymbol: String,
+        val unitsFulfilled: Int,
+        val unitsRequired: Int
+    ) : ActionResult
 }
 
 /**
@@ -216,4 +236,15 @@ sealed interface ShipDetailEvent {
         val systemSymbol: String,
         val waypointSymbol: String
     ) : ShipDetailEvent
+
+    data object NegotiateContractClicked : ShipDetailEvent
+    data object NegotiateConfirmed : ShipDetailEvent
+    data object NegotiateDismissed : ShipDetailEvent
+
+    data object DeliverCargoClicked : ShipDetailEvent
+    data class DeliverContractSelected(val contract: Contract) : ShipDetailEvent
+    data class DeliverGoodSelected(val good: ContractDeliverGood) : ShipDetailEvent
+    data class DeliverUnitsChanged(val units: String) : ShipDetailEvent
+    data object DeliverConfirmed : ShipDetailEvent
+    data object DeliverDismissed : ShipDetailEvent
 }

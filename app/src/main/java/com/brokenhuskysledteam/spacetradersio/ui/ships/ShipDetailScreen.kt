@@ -399,6 +399,17 @@ private fun CommandOutputCard(result: ActionResult, onDismiss: () -> Unit) {
                 CommandLine("  COST: ${result.totalCost} CREDITS", amberColor)
                 CommandLine("  BALANCE: ${result.newCredits} CREDITS", amberColor)
             }
+            is ActionResult.NegotiatedContract -> {
+                CommandLine("> CONTRACT NEGOTIATED", amberColor)
+                CommandLine("  ID: ${result.contractId}", amberColor)
+                CommandLine("  TYPE: ${result.type}", amberColor)
+                CommandLine("  UPFRONT: ${result.upfrontPayment} CR", amberColor)
+            }
+            is ActionResult.DeliveredCargo -> {
+                CommandLine("> CARGO DELIVERED", amberColor)
+                CommandLine("  GOOD: ${result.tradeSymbol}", amberColor)
+                CommandLine("  DELIVERED: ${result.unitsFulfilled}/${result.unitsRequired}", amberColor)
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         TerminalButton(
