@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.ui.ships
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,13 +13,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -26,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Contract
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractDeliverGood
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.ui.components.ScanlineOverlay
 import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalButton
@@ -217,6 +228,23 @@ fun ShipDetailScreenContent(
                         onEvent = onEvent
                     )
 
+                    if (ship.navStatus == ShipNavStatus.DOCKED) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TerminalButton(
+                            text = "NEGOTIATE CONTRACT",
+                            onClick = { onEvent(ShipDetailEvent.NegotiateContractClicked) },
+                            enabled = !uiState.isActionInProgress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TerminalButton(
+                            text = "DELIVER CARGO",
+                            onClick = { onEvent(ShipDetailEvent.DeliverCargoClicked) },
+                            enabled = !uiState.isActionInProgress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
@@ -224,6 +252,124 @@ fun ShipDetailScreenContent(
 
         ScanlineOverlay()
     }
+
+    if (uiState.pendingNegotiate) {
+        AlertDialog(
+            onDismissRequest = { onEvent(ShipDetailEvent.NegotiateDismissed) },
+            title = { Text("NEGOTIATE CONTRACT?", color = MaterialTheme.colorScheme.primary) },
+            text = {
+                Text(
+                    "Request a new contract offer at this waypoint. The ship must remain docked.",
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            confirmButton = {
+                TerminalButton(text = "NEGOTIATE", onClick = { onEvent(ShipDetailEvent.NegotiateConfirmed) })
+            },
+            dismissButton = {
+                TerminalButton(text = "CANCEL", onClick = { onEvent(ShipDetailEvent.NegotiateDismissed) })
+            }
+        )
+    }
+
+    if (uiState.isDeliverDialogOpen) {
+        DeliverCargoDialog(
+            activeContracts = uiState.activeContracts,
+            selectedContract = uiState.selectedDeliverContract,
+            selectedGood = uiState.selectedDeliverGood,
+            units = uiState.deliverUnits,
+            onEvent = onEvent
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeliverCargoDialog(
+    activeContracts: List<Contract>,
+    selectedContract: Contract?,
+    selectedGood: ContractDeliverGood?,
+    units: String,
+    onEvent: (ShipDetailEvent) -> Unit
+) {
+    var contractExpanded by remember { mutableStateOf(false) }
+    var goodExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { onEvent(ShipDetailEvent.DeliverDismissed) },
+        title = { Text("DELIVER CARGO", color = MaterialTheme.colorScheme.primary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExposedDropdownMenuBox(expanded = contractExpanded, onExpandedChange = { contractExpanded = it }) {
+                    OutlinedTextField(
+                        value = selectedContract?.id ?: "SELECT CONTRACT",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("CONTRACT") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(contractExpanded) },
+                        modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = contractExpanded, onDismissRequest = { contractExpanded = false }) {
+                        if (activeContracts.isEmpty()) {
+                            DropdownMenuItem(text = { Text("No active contracts") }, onClick = {})
+                        } else {
+                            activeContracts.forEach { contract ->
+                                DropdownMenuItem(
+                                    text = { Text("${contract.id} (${contract.type.name})") },
+                                    onClick = {
+                                        onEvent(ShipDetailEvent.DeliverContractSelected(contract))
+                                        contractExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (selectedContract != null) {
+                    ExposedDropdownMenuBox(expanded = goodExpanded, onExpandedChange = { goodExpanded = it }) {
+                        OutlinedTextField(
+                            value = selectedGood?.let { "${it.tradeSymbol} (${it.unitsFulfilled}/${it.unitsRequired})" }
+                                ?: "SELECT GOOD",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("TRADE GOOD") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(goodExpanded) },
+                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(expanded = goodExpanded, onDismissRequest = { goodExpanded = false }) {
+                            selectedContract.terms.deliverGoods.forEach { good ->
+                                DropdownMenuItem(
+                                    text = { Text("${good.tradeSymbol}: ${good.unitsFulfilled}/${good.unitsRequired} @ ${good.destinationSymbol}") },
+                                    onClick = {
+                                        onEvent(ShipDetailEvent.DeliverGoodSelected(good))
+                                        goodExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = units,
+                    onValueChange = { onEvent(ShipDetailEvent.DeliverUnitsChanged(it)) },
+                    label = { Text("UNITS") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TerminalButton(
+                text = "DELIVER",
+                onClick = { onEvent(ShipDetailEvent.DeliverConfirmed) },
+                enabled = selectedContract != null && selectedGood != null && units.toIntOrNull() != null
+            )
+        },
+        dismissButton = {
+            TerminalButton(text = "CANCEL", onClick = { onEvent(ShipDetailEvent.DeliverDismissed) })
+        }
+    )
 }
 
 /**
