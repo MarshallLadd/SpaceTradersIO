@@ -80,6 +80,7 @@ internal class FakeFleetApi(
     )
     override suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto =
         NavigateResponseDto(nav = singleShip.nav, fuel = ShipFuelDto(current = 400, capacity = 400))
+    override suspend fun negotiateContract(shipSymbol: String): com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDto = throw UnsupportedOperationException()
 }
 
 class FleetRepositoryImplTest {

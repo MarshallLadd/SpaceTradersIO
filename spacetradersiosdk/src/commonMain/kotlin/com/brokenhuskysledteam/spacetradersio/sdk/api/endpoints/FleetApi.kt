@@ -2,8 +2,10 @@ package com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.client.SpaceTradersClient
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ApiResponse
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateRequestDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateResponseDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NegotiateContractResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.OrbitDockResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.RefuelResponseDto
@@ -82,6 +84,12 @@ interface FleetApi {
      * @return [NavigateResponseDto] with updated nav state and fuel consumption.
      */
     suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto
+
+    /**
+     * Negotiates a new contract at the ship's current waypoint.
+     * The ship must be DOCKED. Returns the newly created contract DTO.
+     */
+    suspend fun negotiateContract(shipSymbol: String): ContractDto
 }
 
 /**
@@ -195,4 +203,8 @@ class FleetApiImpl(private val client: SpaceTradersClient) : FleetApi {
         client.authenticated.post("my/ships/$shipSymbol/navigate") {
             setBody(NavigateRequestDto(waypointSymbol))
         }.body<ApiResponse<NavigateResponseDto>>().data
+
+    override suspend fun negotiateContract(shipSymbol: String): ContractDto =
+        client.authenticated.post("my/ships/$shipSymbol/negotiate/contract") { setBody("{}") }
+            .body<ApiResponse<NegotiateContractResponseDto>>().data.contract
 }
