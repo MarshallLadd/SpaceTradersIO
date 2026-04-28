@@ -88,6 +88,7 @@ kotlin {
                 implementation(libs.ktor.client.mock)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.sqldelight.jvm.driver)
+                implementation(libs.turbine)
             }
         }
 
