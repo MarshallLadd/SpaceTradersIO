@@ -105,3 +105,6 @@ data class SystemMapRoute(
 
 @Serializable
 data class ShipyardRoute(val systemSymbol: String, val waypointSymbol: String)
+
+@Serializable
+object ContractsRoute

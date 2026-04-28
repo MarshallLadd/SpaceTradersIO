@@ -70,4 +70,6 @@ sealed interface DashboardEvent {
      * which the stateful [DashboardScreen] collects and forwards to the NavController.
      */
     data object FleetCardClicked : DashboardEvent
+
+    data object ContractsCardClicked : DashboardEvent
 }
