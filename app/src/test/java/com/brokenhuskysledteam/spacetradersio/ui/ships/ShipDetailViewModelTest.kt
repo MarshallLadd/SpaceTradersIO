@@ -18,9 +18,19 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTyp
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Waypoint
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.WaypointTrait
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Contract
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractDeliverGood
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractMeta
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractTerms
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractStatus
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractTab
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NegotiateContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +57,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 private val NOW = Instant.parse("2025-06-01T10:00:00.000Z")
+private val FUTURE = Instant.parse("2099-01-01T00:00:00Z")
 
 private fun fakeWaypoint(symbol: String = "X1-DF55-20250Z") =
     ShipNavRouteWaypoint(symbol = symbol, type = WaypointType.MOON, systemSymbol = "X1-DF55", x = 0, y = 0)
@@ -165,6 +176,43 @@ private class FakeRefuelUseCase(
     }
 }
 
+private class FakeContractRepository : ContractRepository {
+    override fun observeContracts(tab: ContractTab, limit: Long, offset: Long): Flow<List<Contract>> =
+        flowOf(emptyList())
+    override suspend fun refreshContracts(page: Int, limit: Int): ContractMeta =
+        ContractMeta(total = 0, page = page, limit = limit)
+    override suspend fun acceptContract(contractId: String): Contract = error("not used")
+    override suspend fun fulfillContract(contractId: String): Contract = error("not used")
+    override suspend fun upsertContract(contract: Contract) = Unit
+}
+
+private class FakeNegotiateContractUseCase : NegotiateContractUseCase {
+    var lastShipSymbol: String? = null
+    override suspend fun invoke(shipSymbol: String): Contract {
+        lastShipSymbol = shipSymbol
+        return Contract(
+            id = "C-NEW", factionSymbol = "COSMIC", type = ContractType.PROCUREMENT,
+            accepted = false, fulfilled = false, deadlineToAccept = FUTURE,
+            terms = ContractTerms(deadline = FUTURE, paymentOnAccepted = 500, paymentOnFulfilled = 4500),
+            status = ContractStatus.UNACCEPTED
+        )
+    }
+}
+
+private class FakeDeliverCargoUseCase : DeliverCargoUseCase {
+    override suspend fun invoke(
+        contractId: String, shipSymbol: String, tradeSymbol: String, units: Int
+    ): Contract = Contract(
+        id = contractId, factionSymbol = "COSMIC", type = ContractType.PROCUREMENT,
+        accepted = true, fulfilled = false, deadlineToAccept = FUTURE,
+        terms = ContractTerms(
+            deadline = FUTURE, paymentOnAccepted = 100, paymentOnFulfilled = 900,
+            deliverGoods = listOf(ContractDeliverGood(tradeSymbol, "X1-A-001", 50, units))
+        ),
+        status = ContractStatus.ACTIVE
+    )
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShipDetailViewModelTest {
 
@@ -187,14 +235,20 @@ class ShipDetailViewModelTest {
         systemRepository: SystemRepository = FakeSystemRepository(),
         orbitUseCase: OrbitShipUseCase = FakeOrbitUseCase(repository),
         dockUseCase: DockShipUseCase = FakeDockUseCase(repository),
-        refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase(repository)
+        refuelUseCase: RefuelShipUseCase = FakeRefuelUseCase(repository),
+        contractRepository: ContractRepository = FakeContractRepository(),
+        negotiateContractUseCase: NegotiateContractUseCase = FakeNegotiateContractUseCase(),
+        deliverCargoUseCase: DeliverCargoUseCase = FakeDeliverCargoUseCase()
     ) = ShipDetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf("shipSymbol" to shipSymbol)),
         fleetRepository = repository,
         systemRepository = systemRepository,
         orbitShipUseCase = orbitUseCase,
         dockShipUseCase = dockUseCase,
-        refuelShipUseCase = refuelUseCase
+        refuelShipUseCase = refuelUseCase,
+        contractRepository = contractRepository,
+        negotiateContractUseCase = negotiateContractUseCase,
+        deliverCargoUseCase = deliverCargoUseCase
     )
 
     // ── initial load ──────────────────────────────────────────────────────────
@@ -274,7 +328,10 @@ class ShipDetailViewModelTest {
             systemRepository = FakeSystemRepository(),
             orbitShipUseCase = FakeOrbitUseCase(errorRepo),
             dockShipUseCase = FakeDockUseCase(errorRepo),
-            refuelShipUseCase = FakeRefuelUseCase(errorRepo)
+            refuelShipUseCase = FakeRefuelUseCase(errorRepo),
+            contractRepository = FakeContractRepository(),
+            negotiateContractUseCase = FakeNegotiateContractUseCase(),
+            deliverCargoUseCase = FakeDeliverCargoUseCase()
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -454,5 +511,47 @@ class ShipDetailViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(stateBefore.ship, viewModel.uiState.value.ship)
         assertEquals(stateBefore.hasShipyard, viewModel.uiState.value.hasShipyard)
+    }
+
+    // ── negotiate contract ────────────────────────────────────────────────────
+
+    @Test
+    fun negotiateContractClicked_setsPendingNegotiate() = runTest {
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onEvent(ShipDetailEvent.NegotiateContractClicked)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.pendingNegotiate)
+    }
+
+    @Test
+    fun negotiateDismissed_clearsPendingNegotiate() = runTest {
+        val viewModel = createViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onEvent(ShipDetailEvent.NegotiateContractClicked)
+        viewModel.onEvent(ShipDetailEvent.NegotiateDismissed)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.pendingNegotiate)
+    }
+
+    @Test
+    fun negotiateConfirmed_callsUseCaseAndShowsResult() = runTest {
+        val fakeNegotiate = FakeNegotiateContractUseCase()
+        val viewModel = createViewModel(negotiateContractUseCase = fakeNegotiate)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onEvent(ShipDetailEvent.NegotiateContractClicked)
+        viewModel.onEvent(ShipDetailEvent.NegotiateConfirmed)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("LADD-1", fakeNegotiate.lastShipSymbol)
+        assertFalse(viewModel.uiState.value.pendingNegotiate)
+        val result = assertIs<ActionResult.NegotiatedContract>(viewModel.uiState.value.actionResult)
+        assertEquals("C-NEW", result.contractId)
+        assertEquals(500, result.upfrontPayment)
     }
 }
