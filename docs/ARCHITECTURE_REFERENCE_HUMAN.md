@@ -763,6 +763,64 @@ class SessionManagerImpl(
 
 **Why is `SpaceTradersDatabase` a singleton passed into the session?** The SQLite file lives for the app process lifetime, not the session lifetime. The session's `destroy()` clears the relevant rows but does not close or recreate the DB driver. This is why the `@Singleton` DB is injected into `SessionManagerImpl` via DI, not created inside the session.
 
+### Contract Repository — Two-Table Design + Status Computation
+
+The contract management feature adds two SQLDelight tables (`contract` and `contract_deliver_good`) and introduces a pattern where the domain status is computed in the mapper layer and stored as a plain TEXT column so SQL can filter by tab without doing date arithmetic.
+
+**Why compute status at the mapper, not on every read?**
+
+`ContractStatus` depends on the current time (`Clock.System.now()`). Computing it on every DB observation would mean every Flow emission recalculates all statuses — and results could differ for the same DB row depending on when the subscriber reads. Storing the status as a TEXT column alongside the row instead gives SQL a stable, filterable value. The trade-off is that cached rows can become stale if the clock advances significantly between API calls. This is acceptable because `refreshContracts()` recomputes and re-stores status on every network fetch.
+
+```
+ContractDto.toDomain(now: Instant) {
+    val status = computeContractStatus(accepted, fulfilled, deadlineToAccept, termsDeadline, now)
+    return Contract(..., status = status)
+}
+```
+
+**Why a separate `contract_deliver_good` table?**
+
+A contract can have multiple deliver-good requirements (`tradeSymbol`, `destinationSymbol`, `unitsRequired`, `unitsFulfilled`). A single `contract` row cannot represent this list — it belongs in a child table keyed by `(contract_id, trade_symbol)`. On every upsert the repository runs a single `database.transaction { }` that upserts the parent row and does `deleteByContractId` + re-inserts all deliver-good rows. This delete-then-reinsert strategy is simpler than a merge and correct because the full list is always returned by the API.
+
+```kotlin
+override suspend fun upsertContract(contract: Contract) {
+    database.transaction {
+        database.contractQueries.upsert(contract)
+        database.contractDeliverGoodQueries.deleteByContractId(contract.id)
+        contract.terms.deliverGoods.forEach { good ->
+            database.contractDeliverGoodQueries.upsert(contract.id, good)
+        }
+    }
+}
+```
+
+**`ContractRepository` is `@Singleton`** because it depends only on `ContractsApi` and `SpaceTradersDatabase`, both of which are singletons. This is the same reasoning as `AgentRepository`. Unlike `FleetRepository` (which holds a `RefreshScheduler` that is session-scoped), `ContractRepository` has no session-dependent deps and is safe to scope to the app process.
+
+### ContractsViewModel — QueryKey + flatMapLatest Pattern
+
+The `LocalState` + `combine` pattern from `ShipyardViewModel` works well when you need to re-combine the *same* repository `Flow` with updated local flags. But `ContractsViewModel` has a different need: when the user switches tabs or changes the page size, the underlying SQL query changes (`selectActiveTab` vs `selectHistoryTab`, different `LIMIT`/`OFFSET`). A simple `combine` cannot restart the DB subscription with new parameters.
+
+The solution: extract a `QueryKey` data class containing only the fields that affect the SQL query, map `_localState` through it, add `distinctUntilChanged()`, then use `flatMapLatest` to re-subscribe whenever the key changes:
+
+```kotlin
+private data class QueryKey(val tab: ContractTab, val page: Int, val limit: Int)
+
+@OptIn(ExperimentalCoroutinesApi::class)
+private val contractsFlow = _localState
+    .map { QueryKey(it.selectedTab, it.currentPage, it.limit) }
+    .distinctUntilChanged()          // don't restart the DB subscription for isLoading/pendingAccept changes
+    .flatMapLatest { key ->
+        val offset = ((key.page - 1) * key.limit).toLong()
+        contractRepository.observeContracts(key.tab, key.limit.toLong(), offset)
+    }
+
+val uiState = combine(contractsFlow, _localState) { contracts, local ->
+    ContractsUiState(contracts = contracts, ...)
+}.stateIn(viewModelScope, SharingStarted.Eagerly, ContractsUiState())
+```
+
+`distinctUntilChanged()` is the critical piece. Without it, every `_localState.update { it.copy(isLoading = true) }` would trigger a `flatMapLatest` restart — cancelling the current DB subscription and re-subscribing with the same query. The key observation is that `_localState` changes for many reasons (loading flag, pending dialog state, action results), but only tab/page/limit changes should restart the DB subscription.
+
 ---
 
 ## 5. Networking (Ktor)

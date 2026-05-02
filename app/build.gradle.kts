@@ -46,6 +46,7 @@ android {
 dependencies {
     // SDK module
     implementation(project(":spacetradersiosdk"))
+    implementation(files("../libs/loggerkit-release.aar"))
 
     // SDK transitive deps needed for DI wiring
     implementation(libs.multiplatform.settings.no.arg)

@@ -19,6 +19,35 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Drives the Contracts screen by combining a paginated, tab-filtered reactive DB query
+ * with ephemeral UI state (loading, dialogs, action results).
+ *
+ * **Pattern: QueryKey + flatMapLatest.** The key challenge for a paginated, tabbed screen
+ * is that only some state changes should trigger a new DB subscription (tab, page, limit),
+ * while other changes (isLoading, pendingAccept, error) should not. This ViewModel solves
+ * that with a private [QueryKey] data class that captures only the query-relevant fields.
+ * `_localState` is mapped to a `QueryKey`, deduplicated with `distinctUntilChanged()`, then
+ * passed to `flatMapLatest` which re-subscribes to `observeContracts` whenever the key
+ * changes. Ephemeral mutations to `_localState` that don't change the `QueryKey` are
+ * invisible to the DB layer.
+ *
+ * To apply this pattern in a new project:
+ * 1. Identify which fields drive the query (tab, page, limit) and which are UI-only.
+ * 2. Create a `QueryKey` data class holding only the query fields.
+ * 3. Extract `QueryKey` from `_localState` with `.map { ... }.distinctUntilChanged()`.
+ * 4. Pass the key to `flatMapLatest { key -> repository.observeX(key.field1, ...) }`.
+ * 5. `combine()` the resulting flow with `_localState` to build the final `uiState`.
+ *
+ * **LocalState pattern:** `_localState` holds ViewModel-owned ephemeral state (loading flags,
+ * dialog selection, action results, errors). The repository's reactive `observeContracts`
+ * flow provides the contract list. Both are merged in the `combine()` call that produces
+ * `uiState`. See `ShipDetailViewModel` for the same pattern applied to a detail screen.
+ *
+ * **SharingStarted.Eagerly:** Used so that `uiState.value` is always current, even in unit
+ * tests that read `.value` directly without an active collector. See the `CLAUDE.md` gotcha
+ * on `stateIn(WhileSubscribed) + StandardTestDispatcher`.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ContractsViewModel @Inject constructor(
@@ -90,6 +119,13 @@ class ContractsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fetches the current page from the network and updates [_localState] with the result.
+     *
+     * The page number and limit are captured from [_localState] *before* updating it to
+     * `isLoading = true`. This is intentional: the `update` call changes `_localState`,
+     * and reading `.value` afterwards would see the already-updated copy.
+     */
     private fun loadPage() {
         val state = _localState.value
         _localState.update { it.copy(isLoading = true, error = null) }
@@ -103,6 +139,13 @@ class ContractsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Calls `acceptContract` after the user has confirmed the dialog.
+     *
+     * Two-step pattern: (1) clear `pendingAccept` immediately so the confirmation dialog
+     * dismisses before the API call completes; (2) set `actionResult` on success so the
+     * outcome dialog appears. The same two-step is used by [performFulfill].
+     */
     private fun performAccept() {
         val contract = _localState.value.pendingAccept ?: return
         _localState.update { it.copy(isActionInProgress = true, pendingAccept = null, error = null) }
@@ -124,6 +167,7 @@ class ContractsViewModel @Inject constructor(
         }
     }
 
+    /** Calls `fulfillContract` after the user has confirmed the dialog. See [performAccept]. */
     private fun performFulfill() {
         val contract = _localState.value.pendingFulfill ?: return
         _localState.update { it.copy(isActionInProgress = true, pendingFulfill = null, error = null) }
@@ -145,6 +189,19 @@ class ContractsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * ViewModel-owned ephemeral state, separate from the repository's reactive data stream.
+     *
+     * **Pattern:** LocalState. Holds everything the ViewModel manages directly: loading flags,
+     * dialog contracts, action results, and error messages. The repository's `observeContracts`
+     * Flow provides the actual contract list. Both streams are merged in the `combine()` call
+     * above to produce the single [uiState] snapshot the composable reads. See
+     * `ShipDetailViewModel.LocalState` for the same pattern on a detail screen.
+     *
+     * **Important:** [selectedTab], [currentPage], and [limit] are also part of this class
+     * because they are inputs to the [QueryKey]. Changes to these three fields (and only these
+     * three) cause `flatMapLatest` to re-subscribe to a new DB query.
+     */
     private data class LocalState(
         val selectedTab: ContractTab = ContractTab.ACTIVE,
         val currentPage: Int = 1,
@@ -158,5 +215,15 @@ class ContractsViewModel @Inject constructor(
         val error: String? = null
     )
 
+    /**
+     * The minimal identity of a DB subscription: which tab is shown, which page, and how many
+     * results per page.
+     *
+     * **Pattern:** Query key for reactive pagination. By extracting only these three fields
+     * from [LocalState] and wrapping them in a `data class`, `distinctUntilChanged()` can
+     * suppress re-subscriptions caused by unrelated [LocalState] mutations (loading flags,
+     * dialog state). Any change to [tab], [page], or [limit] produces a new [QueryKey]
+     * value, which triggers `flatMapLatest` to cancel the old subscription and start a new one.
+     */
     private data class QueryKey(val tab: ContractTab, val page: Int, val limit: Int)
 }

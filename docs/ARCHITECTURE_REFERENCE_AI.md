@@ -291,6 +291,41 @@ combine(
 }
 ```
 
+**Contract repository (two-table SQLDelight design):**
+
+`ContractRepository` follows the same cache-then-network pattern as `ShipRepository` with two differences:
+
+- **Two tables:** `contract` + `contract_deliver_good`. On every upsert the repository runs a single SQLDelight `transaction { }` that upserts the parent row then does `deleteByContractId` + re-inserts for each deliver good. This keeps deliver-good rows consistent without a merge strategy.
+- **Status at mapper boundary:** `ContractStatus` is computed by `computeContractStatus()` inside `ContractDto.toDomain()` using `Clock.System.now()`, then stored as a TEXT column (`'ACTIVE'`, `'UNACCEPTED'`, etc.). The SQL queries filter directly by status string (`WHERE status = 'UNACCEPTED' OR status = 'ACTIVE'`), avoiding date arithmetic in SQL. Status in the DB can grow stale between API calls — this is acceptable because `refreshContracts()` recomputes and re-stores status on every network fetch.
+- **`@Singleton` is safe** because `ContractRepositoryImpl` only depends on `ContractsApi` and `SpaceTradersDatabase` (both `@Singleton`). Unlike `FleetRepository`, it has no `RefreshScheduler` dependency.
+- **`observeContracts` returns rows for one tab at a time** (active or history), paged by `limit`/`offset`.
+
+**`ContractsViewModel` — QueryKey + flatMapLatest pattern:**
+
+`LocalState` alone is not enough when a ViewModel must re-subscribe to a *different* SQL query (different tab or page), not just re-combine the same query with new local state. Use:
+
+```kotlin
+private val _localState = MutableStateFlow(LocalState())
+
+// Re-subscribes to DB only when tab/page/limit change — not on isLoading/pendingAccept mutations.
+@OptIn(ExperimentalCoroutinesApi::class)
+private val contractsFlow = _localState
+    .map { QueryKey(it.selectedTab, it.currentPage, it.limit) }
+    .distinctUntilChanged()
+    .flatMapLatest { key ->
+        val offset = ((key.page - 1) * key.limit).toLong()
+        contractRepository.observeContracts(key.tab, key.limit.toLong(), offset)
+    }
+
+val uiState = combine(contractsFlow, _localState) { contracts, local ->
+    ContractsUiState(contracts = contracts, selectedTab = local.selectedTab, ...)
+}.stateIn(viewModelScope, SharingStarted.Eagerly, ContractsUiState())
+
+private data class QueryKey(val tab: ContractTab, val page: Int, val limit: Int)
+```
+
+`distinctUntilChanged()` prevents `flatMapLatest` from restarting the DB subscription every time any `_localState` field changes. The `QueryKey` contains only the fields that actually change the SQL query.
+
 **Repository (StateStore-backed, e.g. waypoints):**
 ```kotlin
 interface WaypointRepository { suspend fun getWaypoints(systemSymbol: String): List<Waypoint> }
@@ -412,6 +447,7 @@ class FooApiImpl(private val client: SpaceTradersClient) : FooApi {
 - `@Singleton`: `TokenRepository`, `SpaceTradersClient`, `SessionManager`, `SpaceTradersDatabase`, `AgentRepository`, all API impls.
 - `SpaceTradersDatabase` is a singleton: `SqlDriverFactory(@ApplicationContext context).create()` — one DB for the app lifetime.
 - `AgentRepository` is singleton because it only depends on `AgentsApi` + `SpaceTradersDatabase` (both singletons).
+- `ContractRepository` is `@Singleton` for the same reason — depends only on `ContractsApi` + `SpaceTradersDatabase`, no session-scoped deps.
 - `FleetRepository` is **unscoped** because it depends on `RefreshScheduler` (session-scoped). Same for use cases that touch session state.
 - A repository that depends on another **unscoped** (session-dependent) repository must itself be unscoped — even if it has no direct session dep. Example: `ShipyardRepository` depends on `FleetRepository` and `AgentRepository` (both unscoped), so it too is unscoped. Making it `@Singleton` would hold stale session references across login/logout.
 - Unscoped: session-dependent scheduler + state stores — delegate to `sm.requireSession().xxxStore`.
@@ -551,3 +587,6 @@ class FooViewModelTest {
 | Cross-module smart cast | Kotlin cannot smart-cast a public property from another module. Capture in a `val` first: `val ships = shipyard.ships; if (ships != null) { items(ships) { ... } }`. |
 | `combine` + single `update` timing in tests | A single `_localState.update {}` schedules a combine re-emission on the test dispatcher — it does NOT execute synchronously. Call `testDispatcher.scheduler.advanceUntilIdle()` after each state-changing `onEvent()` before reading `uiState.value`. Two consecutive updates before an advance coalesce (only the final state emits). |
 | Fog-of-war nullable list in SQLDelight | A table cannot distinguish "no rows = null" from "no rows = empty list". Add a sentinel column (`ships_cached INTEGER`) and set it to `1` when the API returned a list, `0` for fog-of-war. Read it in the observe flow to decide `null` vs mapped list. |
+| `ContractRepository @Singleton` is safe | `ContractRepository` depends only on `ContractsApi` and `SpaceTradersDatabase` (both singletons). Unlike `FleetRepository` (which holds `RefreshScheduler`), it has no session-scoped dep → `@Singleton` is correct. |
+| `ContractStatus` stored as TEXT in DB | Status is computed from timestamps in the mapper via `computeContractStatus()` and stored as TEXT. SQL tab queries filter by status string directly. Status can grow stale if the clock advances between refreshes — acceptable because `refreshContracts()` recomputes status on every network call. |
+| `QueryKey + flatMapLatest` in `ContractsViewModel` | Use `_localState.map { QueryKey(...) }.distinctUntilChanged().flatMapLatest { ... }` when the ViewModel must re-subscribe to a *different* SQL query (different tab/page), not just re-combine the same one. `distinctUntilChanged()` prevents `flatMapLatest` from restarting on every ephemeral `LocalState` mutation (e.g., `isLoading`, `pendingAccept`). |

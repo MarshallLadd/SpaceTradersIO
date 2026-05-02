@@ -41,6 +41,20 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractTab
 import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalButton
 import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalCard
 
+/**
+ * Stateful entry point for the Contracts screen. Owns the [ContractsViewModel] and
+ * collects [ContractsUiState] as lifecycle-aware state.
+ *
+ * **Pattern:** Stateful / stateless composable split. This function is the only composable
+ * that references the ViewModel directly. It immediately delegates all rendering to
+ * [ContractsScreenContent], which is a pure function of its parameters and can be used in
+ * Compose Previews without a ViewModel. To apply this pattern in a new project: keep one
+ * stateful wrapper that wires the ViewModel, and put all visual logic in a stateless
+ * `ScreenContent` function.
+ *
+ * See `AuthScreen`, `DashboardScreen`, `ShipListScreen`, and `ShipDetailScreen` for the
+ * same split applied across every screen in this project.
+ */
 @Composable
 fun ContractsScreen(
     onNavigateBack: () -> Unit,
@@ -50,6 +64,19 @@ fun ContractsScreen(
     ContractsScreenContent(uiState = uiState, onEvent = viewModel::onEvent, onNavigateBack = onNavigateBack)
 }
 
+/**
+ * Stateless Contracts screen. Renders entirely from [uiState] and emits user interactions
+ * as [ContractsEvent] values via [onEvent].
+ *
+ * **Three-layer dialog system:** The three optional dialogs (accept confirmation, fulfill
+ * confirmation, action result) are rendered *outside* the main `Column` so they float above
+ * all content as overlays. Each is controlled by a nullable field in [ContractsUiState]:
+ * - [ContractsUiState.pendingAccept] — non-null while the accept dialog is open.
+ * - [ContractsUiState.pendingFulfill] — non-null while the fulfill dialog is open.
+ * - [ContractsUiState.actionResult] — non-null while the one-shot success dialog is open.
+ * All three are cleared by emitting the corresponding dismiss event, which sets the field
+ * back to `null` in the ViewModel's `LocalState`.
+ */
 @Composable
 fun ContractsScreenContent(
     uiState: ContractsUiState,
@@ -140,6 +167,14 @@ fun ContractsScreenContent(
     }
 }
 
+/**
+ * Prev/Next buttons and a page-size dropdown for navigating the paginated contract list.
+ *
+ * The PREV and NEXT buttons emit [ContractsEvent.PageChanged] and are enabled only when
+ * [ContractsUiState.canGoPrevPage] / [ContractsUiState.canGoNextPage] are `true`.
+ * The `ExposedDropdownMenuBox` emits [ContractsEvent.LimitChanged] when the user selects
+ * a different page size, which also resets the current page to 1 in the ViewModel.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PaginationControls(
@@ -198,6 +233,16 @@ private fun PaginationControls(
     }
 }
 
+/**
+ * Renders a single contract as a terminal-styled card with status, faction, payment terms,
+ * delivery progress rows, and a context-sensitive action button.
+ *
+ * **Action button logic:**
+ * - `UNACCEPTED` contracts show an ACCEPT button (opens the confirmation dialog).
+ * - `ACTIVE` contracts show a FULFILL button *only* when all deliver-goods have
+ *   `unitsFulfilled >= unitsRequired`. The `allDelivered` check prevents premature fulfillment.
+ * - All other statuses (`FULFILLED`, `EXPIRED`, `CANCELLED`) show no button.
+ */
 @Composable
 private fun ContractItem(contract: Contract, onEvent: (ContractsEvent) -> Unit) {
     val allDelivered = contract.terms.deliverGoods.isNotEmpty() &&
