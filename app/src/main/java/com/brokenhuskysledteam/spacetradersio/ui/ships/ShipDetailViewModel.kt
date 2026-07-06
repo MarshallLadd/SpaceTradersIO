@@ -369,6 +369,7 @@ private fun Ship.toDetail(): ShipDetail {
         fuelCurrent = fuel.current,
         fuelCapacity = fuel.capacity,
         cargoUnits = cargo.units,
-        cargoCapacity = cargo.capacity
+        cargoCapacity = cargo.capacity,
+        cargoInventory = cargo.inventory
     )
 }
