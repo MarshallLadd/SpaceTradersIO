@@ -2,9 +2,13 @@ package com.brokenhuskysledteam.spacetradersio.sdk.e2e
 
 import com.brokenhuskysledteam.spacetradersio.sdk.api.client.SpaceTradersClient
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.RegisterResponseDto
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
+import kotlinx.coroutines.delay
 import org.junit.Assume.assumeTrue
 
 /**
@@ -59,6 +63,36 @@ class E2eSession(
     val registration: RegisterResponseDto
 ) {
     val fleetApi = FleetApiImpl(client)
+    val marketApi = MarketApiImpl(client)
+    val systemsApi = SystemsApiImpl(client)
+
+    /** The starting COMMAND ship (the frigate), or the first ship if none is COMMAND. */
+    val commandShip: ShipDto =
+        registration.ships.firstOrNull { it.registration.role == "COMMAND" } ?: registration.ships.first()
+}
+
+/**
+ * Ensures [shipSymbol] is DOCKED at [waypointSymbol] in its current system, navigating there
+ * first if necessary. Polls until an in-transit ship arrives (real network time), capped by
+ * [timeoutMs]. Returns the ship's final state.
+ *
+ * Reused by market/mining/travel live tests to get a ship to where it needs to act.
+ */
+suspend fun E2eSession.arriveAndDock(shipSymbol: String, waypointSymbol: String, timeoutMs: Long = 180_000): ShipDto {
+    var ship = fleetApi.getMyShip(shipSymbol)
+    if (ship.nav.waypointSymbol != waypointSymbol) {
+        // Must be in orbit to navigate; FleetApi does not auto-orbit.
+        if (ship.nav.status == "DOCKED") fleetApi.orbitShip(shipSymbol)
+        fleetApi.navigateShip(shipSymbol, waypointSymbol)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            ship = fleetApi.getMyShip(shipSymbol)
+            if (ship.nav.status != "IN_TRANSIT") break
+            delay(3_000)
+        }
+    }
+    if (ship.nav.status != "DOCKED") fleetApi.dockShip(shipSymbol)
+    return fleetApi.getMyShip(shipSymbol)
 }
 
 /**
