@@ -66,6 +66,7 @@ import kotlin.time.ExperimentalTime
 fun ShipDetailScreen(
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
+    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -73,7 +74,8 @@ fun ShipDetailScreen(
         uiState = uiState,
         onEvent = viewModel::onEvent,
         onNavigateToSystemMap = onNavigateToSystemMap,
-        onNavigateToShipyard = onNavigateToShipyard
+        onNavigateToShipyard = onNavigateToShipyard,
+        onNavigateToMarket = onNavigateToMarket
     )
 }
 
@@ -102,7 +104,8 @@ fun ShipDetailScreenContent(
     uiState: ShipDetailUiState,
     onEvent: (ShipDetailEvent) -> Unit,
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
-    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> }
+    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
+    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> }
 ) {
     Box(
         modifier = Modifier
@@ -161,10 +164,15 @@ fun ShipDetailScreenContent(
                     NavigationCard(
                         ship = ship,
                         hasShipyard = uiState.hasShipyard,
+                        hasMarketplace = uiState.hasMarketplace,
                         onNavigateToSystemMap = onNavigateToSystemMap,
                         onNavigateToShipyard = { systemSymbol, waypointSymbol ->
                             onEvent(ShipDetailEvent.ViewShipyardClicked(systemSymbol, waypointSymbol))
                             onNavigateToShipyard(systemSymbol, waypointSymbol)
+                        },
+                        onNavigateToMarket = { systemSymbol, waypointSymbol, marketShipSymbol ->
+                            onEvent(ShipDetailEvent.ViewMarketClicked(systemSymbol, waypointSymbol, marketShipSymbol))
+                            onNavigateToMarket(systemSymbol, waypointSymbol, marketShipSymbol)
                         }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -407,8 +415,10 @@ private fun DeliverCargoDialog(
 private fun NavigationCard(
     ship: ShipDetail,
     hasShipyard: Boolean,
+    hasMarketplace: Boolean,
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
-    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit
+    onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit,
+    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit
 ) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
@@ -453,6 +463,15 @@ private fun NavigationCard(
                 TerminalButton(
                     text = "VIEW SHIPYARD",
                     onClick = { onNavigateToShipyard(ship.systemSymbol, ship.waypointSymbol) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            // Trading requires the ship to be docked at a marketplace.
+            if (hasMarketplace && ship.navStatus == ShipNavStatus.DOCKED) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TerminalButton(
+                    text = "TRADE",
+                    onClick = { onNavigateToMarket(ship.systemSymbol, ship.waypointSymbol, ship.symbol) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

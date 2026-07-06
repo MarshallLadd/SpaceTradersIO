@@ -106,5 +106,21 @@ data class SystemMapRoute(
 @Serializable
 data class ShipyardRoute(val systemSymbol: String, val waypointSymbol: String)
 
+/**
+ * Route for the market screen, parameterized by the system, marketplace waypoint, and the ship
+ * that will perform trades.
+ *
+ * @property systemSymbol The star system containing the market (e.g. `"X1-DM91"`).
+ * @property waypointSymbol The marketplace waypoint (e.g. `"X1-DM91-A1"`).
+ * @property shipSymbol The docked ship that buys/sells (e.g. `"HAULER-1"`). Trades require a
+ *   ship docked at the market.
+ */
+@Serializable
+data class MarketRoute(
+    val systemSymbol: String,
+    val waypointSymbol: String,
+    val shipSymbol: String
+)
+
 @Serializable
 object ContractsRoute

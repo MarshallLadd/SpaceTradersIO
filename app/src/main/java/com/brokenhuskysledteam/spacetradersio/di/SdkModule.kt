@@ -8,6 +8,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AgentsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ContractsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
@@ -17,11 +19,13 @@ import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SqlDriverFactory
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.AgentRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ContractRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.MarketRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ShipyardRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.MarketRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ShipyardRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
@@ -30,6 +34,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManagerImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.BuyCargoUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.BuyCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
@@ -46,6 +52,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCa
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.SellCargoUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.SellCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
 import dagger.Module
 import dagger.Provides
@@ -227,6 +235,17 @@ object SdkModule {
     fun provideShipyardApi(client: SpaceTradersClient): ShipyardApi =
         ShipyardApiImpl(client)
 
+    /**
+     * Provides the [MarketApi] implementation for viewing markets and trading cargo.
+     *
+     * @param client The shared Ktor client wrapper.
+     * @return A singleton [MarketApiImpl] bound to the [MarketApi] interface.
+     */
+    @Provides
+    @Singleton
+    fun provideMarketApi(client: SpaceTradersClient): MarketApi =
+        MarketApiImpl(client)
+
     // -----------------------------------------------------------------------------------------
     // Session-Scoped State (Unscoped — delegates to current session on each injection)
     // -----------------------------------------------------------------------------------------
@@ -337,6 +356,20 @@ object SdkModule {
         contractsApi: ContractsApi,
         database: SpaceTradersDatabase
     ): ContractRepository = ContractRepositoryImpl(contractsApi, database)
+
+    /**
+     * Provides the [MarketRepository] for reading market data.
+     *
+     * `@Singleton` is safe: [MarketRepositoryImpl] depends only on the singleton [MarketApi]
+     * and holds no session-scoped state (market data is fetched fresh per call, never cached).
+     *
+     * @param marketApi API class for the market endpoint.
+     * @return A singleton [MarketRepositoryImpl] bound to [MarketRepository].
+     */
+    @Provides
+    @Singleton
+    fun provideMarketRepository(marketApi: MarketApi): MarketRepository =
+        MarketRepositoryImpl(marketApi)
 
     // -----------------------------------------------------------------------------------------
     // Use Cases
@@ -473,4 +506,39 @@ object SdkModule {
         contractsApi: ContractsApi,
         contractRepository: ContractRepository
     ): DeliverCargoUseCase = DeliverCargoUseCaseImpl(contractsApi, contractRepository)
+
+    /**
+     * Provides the [BuyCargoUseCase] for purchasing cargo at a market.
+     *
+     * **Unscoped** (like [provideRefuelShipUseCase]) because it depends on the session-scoped
+     * [FleetRepository]. Scoping it `@Singleton` would capture a stale session's repository
+     * after re-login.
+     *
+     * @param marketApi Issues the purchase command.
+     * @param fleetRepository Persists the ship's updated cargo (incl. inventory).
+     * @param agentRepository Updates the agent's credits after the purchase.
+     * @return A [BuyCargoUseCaseImpl].
+     */
+    @Provides
+    fun provideBuyCargoUseCase(
+        marketApi: MarketApi,
+        fleetRepository: FleetRepository,
+        agentRepository: AgentRepository
+    ): BuyCargoUseCase = BuyCargoUseCaseImpl(marketApi, fleetRepository, agentRepository)
+
+    /**
+     * Provides the [SellCargoUseCase] for selling cargo at a market. Unscoped for the same
+     * reason as [provideBuyCargoUseCase].
+     *
+     * @param marketApi Issues the sell command.
+     * @param fleetRepository Persists the ship's reduced cargo (incl. inventory).
+     * @param agentRepository Updates the agent's credits after the sale.
+     * @return A [SellCargoUseCaseImpl].
+     */
+    @Provides
+    fun provideSellCargoUseCase(
+        marketApi: MarketApi,
+        fleetRepository: FleetRepository,
+        agentRepository: AgentRepository
+    ): SellCargoUseCase = SellCargoUseCaseImpl(marketApi, fleetRepository, agentRepository)
 }

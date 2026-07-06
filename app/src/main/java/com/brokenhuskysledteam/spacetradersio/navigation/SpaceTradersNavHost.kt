@@ -9,6 +9,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenReposit
 import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.contracts.ContractsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
+import com.brokenhuskysledteam.spacetradersio.ui.market.MarketScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
 import com.brokenhuskysledteam.spacetradersio.ui.shipyard.ShipyardScreen
@@ -119,6 +120,9 @@ fun SpaceTradersNavHost(
                 },
                 onNavigateToShipyard = { systemSymbol, waypointSymbol ->
                     navController.navigate(ShipyardRoute(systemSymbol, waypointSymbol))
+                },
+                onNavigateToMarket = { systemSymbol, waypointSymbol, shipSymbol ->
+                    navController.navigate(MarketRoute(systemSymbol, waypointSymbol, shipSymbol))
                 }
             )
         }
@@ -133,6 +137,13 @@ fun SpaceTradersNavHost(
         // Navigation Compose deserializes systemSymbol and waypointSymbol from the back-stack entry.
         composable<ShipyardRoute> {
             ShipyardScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // --- Market screen ---
+        // Buy/sell cargo at a marketplace waypoint using the specified docked ship.
+        // Navigation Compose deserializes systemSymbol, waypointSymbol, and shipSymbol from the route.
+        composable<MarketRoute> {
+            MarketScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- System map screen ---

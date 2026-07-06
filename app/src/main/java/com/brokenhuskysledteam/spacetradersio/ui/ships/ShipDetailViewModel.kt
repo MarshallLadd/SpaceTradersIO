@@ -94,6 +94,7 @@ class ShipDetailViewModel @Inject constructor(
             actionResult = local.actionResult,
             error = local.error,
             hasShipyard = local.hasShipyard,
+            hasMarketplace = local.hasMarketplace,
             pendingNegotiate = local.pendingNegotiate,
             activeContracts = local.activeContracts,
             isDeliverDialogOpen = local.isDeliverDialogOpen,
@@ -159,6 +160,9 @@ class ShipDetailViewModel @Inject constructor(
 
             // Navigation to the shipyard is handled by the composable callback.
             is ShipDetailEvent.ViewShipyardClicked -> Unit
+
+            // Navigation to the market is handled by the composable callback.
+            is ShipDetailEvent.ViewMarketClicked -> Unit
 
             is ShipDetailEvent.NegotiateContractClicked ->
                 _localState.update { it.copy(pendingNegotiate = true) }
@@ -250,7 +254,10 @@ class ShipDetailViewModel @Inject constructor(
                     runCatching {
                         val waypoint = systemRepository.getWaypoint(ship.nav.systemSymbol, ship.nav.waypointSymbol)
                         _localState.update {
-                            it.copy(hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD })
+                            it.copy(
+                                hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD },
+                                hasMarketplace = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.MARKETPLACE }
+                            )
                         }
                     }
                 }
@@ -323,6 +330,7 @@ class ShipDetailViewModel @Inject constructor(
         val actionResult: ActionResult? = null,
         val error: String? = null,
         val hasShipyard: Boolean = false,
+        val hasMarketplace: Boolean = false,
         val pendingNegotiate: Boolean = false,
         val activeContracts: List<Contract> = emptyList(),
         val isDeliverDialogOpen: Boolean = false,

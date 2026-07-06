@@ -38,6 +38,7 @@ data class ShipDetailUiState(
     val actionResult: ActionResult? = null,
     val error: String? = null,
     val hasShipyard: Boolean = false,
+    val hasMarketplace: Boolean = false,
     val pendingNegotiate: Boolean = false,
     val activeContracts: List<Contract> = emptyList(),
     val isDeliverDialogOpen: Boolean = false,
@@ -239,6 +240,17 @@ sealed interface ShipDetailEvent {
     data class ViewShipyardClicked(
         val systemSymbol: String,
         val waypointSymbol: String
+    ) : ShipDetailEvent
+
+    /**
+     * The user tapped "Trade" to open the market at the ship's current (docked) waypoint.
+     * Navigation is handled by the composable's `onNavigateToMarket` callback, wired in the
+     * NavHost — the ViewModel handles it with `-> Unit`.
+     */
+    data class ViewMarketClicked(
+        val systemSymbol: String,
+        val waypointSymbol: String,
+        val shipSymbol: String
     ) : ShipDetailEvent
 
     data object NegotiateContractClicked : ShipDetailEvent
