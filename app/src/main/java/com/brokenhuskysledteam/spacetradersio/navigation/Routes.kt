@@ -122,5 +122,19 @@ data class MarketRoute(
     val shipSymbol: String
 )
 
+/**
+ * Route for the ship mounts screen.
+ *
+ * @property shipSymbol The ship whose mounts to view/modify.
+ * @property systemSymbol The ship's current system (to resolve shipyard availability).
+ * @property waypointSymbol The ship's current waypoint (install/remove require a shipyard here).
+ */
+@Serializable
+data class MountsRoute(
+    val shipSymbol: String,
+    val systemSymbol: String,
+    val waypointSymbol: String
+)
+
 @Serializable
 object ContractsRoute

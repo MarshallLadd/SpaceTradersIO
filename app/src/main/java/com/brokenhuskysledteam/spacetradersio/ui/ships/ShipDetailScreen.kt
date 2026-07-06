@@ -67,6 +67,7 @@ fun ShipDetailScreen(
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,7 +76,8 @@ fun ShipDetailScreen(
         onEvent = viewModel::onEvent,
         onNavigateToSystemMap = onNavigateToSystemMap,
         onNavigateToShipyard = onNavigateToShipyard,
-        onNavigateToMarket = onNavigateToMarket
+        onNavigateToMarket = onNavigateToMarket,
+        onNavigateToMounts = onNavigateToMounts
     )
 }
 
@@ -105,7 +107,8 @@ fun ShipDetailScreenContent(
     onEvent: (ShipDetailEvent) -> Unit,
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
-    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> }
+    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> }
 ) {
     Box(
         modifier = Modifier
@@ -173,7 +176,8 @@ fun ShipDetailScreenContent(
                         onNavigateToMarket = { systemSymbol, waypointSymbol, marketShipSymbol ->
                             onEvent(ShipDetailEvent.ViewMarketClicked(systemSymbol, waypointSymbol, marketShipSymbol))
                             onNavigateToMarket(systemSymbol, waypointSymbol, marketShipSymbol)
-                        }
+                        },
+                        onNavigateToMounts = onNavigateToMounts
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -418,7 +422,8 @@ private fun NavigationCard(
     hasMarketplace: Boolean,
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit,
-    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit
+    onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
+    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit
 ) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
@@ -475,6 +480,13 @@ private fun NavigationCard(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            // Mounts can be viewed anytime; install/remove is gated inside the screen.
+            Spacer(modifier = Modifier.height(8.dp))
+            TerminalButton(
+                text = "MOUNTS",
+                onClick = { onNavigateToMounts(ship.symbol, ship.systemSymbol, ship.waypointSymbol) },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
