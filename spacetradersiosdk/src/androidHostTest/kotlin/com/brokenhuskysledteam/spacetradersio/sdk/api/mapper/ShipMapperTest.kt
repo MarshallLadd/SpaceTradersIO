@@ -1,5 +1,6 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.api.mapper
 
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CargoItemDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CooldownDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipCargoDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipDto
@@ -209,6 +210,33 @@ class ShipMapperTest {
     @Test
     fun cargo_toDomain_capacityMapsCorrectly() {
         assertEquals(40, fullDto().toDomain().cargo.capacity)
+    }
+
+    @Test
+    fun cargo_toDomain_emptyInventoryByDefault() {
+        assertEquals(emptyList(), fullDto().toDomain().cargo.inventory)
+    }
+
+    @Test
+    fun cargo_toDomain_inventoryMapsEachItem() {
+        val dto = fullDto().copy(
+            cargo = ShipCargoDto(
+                capacity = 40,
+                units = 15,
+                inventory = listOf(
+                    CargoItemDto("IRON_ORE", "Iron Ore", "Raw iron ore.", 12),
+                    CargoItemDto("FUEL", "Fuel", "High-grade fuel.", 3)
+                )
+            )
+        )
+        val inventory = dto.toDomain().cargo.inventory
+        assertEquals(2, inventory.size)
+        assertEquals("IRON_ORE", inventory[0].symbol)
+        assertEquals("Iron Ore", inventory[0].name)
+        assertEquals("Raw iron ore.", inventory[0].description)
+        assertEquals(12, inventory[0].units)
+        assertEquals("FUEL", inventory[1].symbol)
+        assertEquals(3, inventory[1].units)
     }
 
     // ── Cooldown ─────────────────────────────────────────────────────────────

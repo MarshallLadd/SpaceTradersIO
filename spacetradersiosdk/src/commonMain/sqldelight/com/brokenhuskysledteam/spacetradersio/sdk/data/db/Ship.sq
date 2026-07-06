@@ -24,6 +24,8 @@ CREATE TABLE ship (
     -- cargo
     cargo_units INTEGER NOT NULL,
     cargo_capacity INTEGER NOT NULL,
+    -- cargo inventory serialized as a JSON array of {symbol,name,description,units}
+    cargo_inventory TEXT NOT NULL DEFAULT '[]',
     -- fuel
     fuel_current INTEGER NOT NULL,
     fuel_capacity INTEGER NOT NULL,
@@ -48,11 +50,11 @@ INSERT OR REPLACE INTO ship (
     route_origin_symbol, route_origin_type, route_origin_system, route_origin_x, route_origin_y,
     route_dest_symbol, route_dest_type, route_dest_system, route_dest_x, route_dest_y,
     route_departure, route_arrival,
-    cargo_units, cargo_capacity,
+    cargo_units, cargo_capacity, cargo_inventory,
     fuel_current, fuel_capacity,
     frame_name,
     cooldown_total_seconds, cooldown_remaining_seconds, cooldown_expiration
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 updateShipNav:
 UPDATE ship SET
@@ -78,7 +80,7 @@ updateShipFuel:
 UPDATE ship SET fuel_current = ?, fuel_capacity = ? WHERE symbol = ?;
 
 updateShipCargo:
-UPDATE ship SET cargo_units = ?, cargo_capacity = ? WHERE symbol = ?;
+UPDATE ship SET cargo_units = ?, cargo_capacity = ?, cargo_inventory = ? WHERE symbol = ?;
 
 updateShipCooldown:
 UPDATE ship SET cooldown_total_seconds = ?, cooldown_remaining_seconds = ?, cooldown_expiration = ? WHERE symbol = ?;

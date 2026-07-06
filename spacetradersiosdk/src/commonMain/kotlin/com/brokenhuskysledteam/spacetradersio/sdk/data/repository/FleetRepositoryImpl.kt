@@ -7,6 +7,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.mapper.toDomain
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.toDomain
+import com.brokenhuskysledteam.spacetradersio.sdk.data.db.updateShipCargo
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.updateShipNav
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.upsertShip
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
@@ -205,11 +206,8 @@ class FleetRepositoryImpl(
      * @param cargo      The updated [ShipCargo] returned by the cargo action endpoint.
      */
     override suspend fun updateShipCargo(shipSymbol: String, cargo: ShipCargo) {
-        queries.updateShipCargo(
-            cargo_units = cargo.units.toLong(),
-            cargo_capacity = cargo.capacity.toLong(),
-            symbol = shipSymbol
-        )
+        // Delegates to the DB-layer extension, which serializes the inventory to JSON.
+        queries.updateShipCargo(cargo, shipSymbol)
     }
 
     /**

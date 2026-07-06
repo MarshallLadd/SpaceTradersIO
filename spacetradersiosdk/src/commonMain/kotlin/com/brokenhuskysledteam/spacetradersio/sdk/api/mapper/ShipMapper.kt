@@ -19,6 +19,7 @@ package com.brokenhuskysledteam.spacetradersio.sdk.api.mapper
 // NavigateMapper.kt reuses ShipNavDto.toDomain() and ShipFuelDto.toDomain() from here,
 // keeping navigation-response conversion consistent with full-ship-response conversion.
 
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CargoItemDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.CooldownDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipCargoDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipDto
@@ -27,6 +28,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavRouteDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipNavRouteWaypointDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipRegistrationDto
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.CargoItem
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
@@ -189,15 +191,31 @@ fun ShipFuelDto.toDomain(): ShipFuel = ShipFuel(
  *
  * **Pattern:** Leaf mapper. Simple field pass-through — no type conversions needed.
  *
- * **In this project:** Cargo state is used by the UI to display a fill-level bar
- * (`units / capacity`). Only the aggregate counts are mapped here; individual cargo item
- * details are not yet part of the domain model.
+ * **In this project:** Cargo state drives both a fill-level bar (`units / capacity`) and an
+ * itemised manifest in the UI. The aggregate counts map directly; each [inventory] entry is
+ * delegated to [CargoItemDto.toDomain].
  *
  * @return The domain model built from this DTO's cargo data.
  */
 fun ShipCargoDto.toDomain(): ShipCargo = ShipCargo(
     units = units,
-    capacity = capacity
+    capacity = capacity,
+    inventory = inventory.map { it.toDomain() }
+)
+
+/**
+ * Maps this [CargoItemDto] to a [CargoItem] domain model.
+ *
+ * **Pattern:** Leaf mapper. Simple field pass-through — no type conversions needed. Called
+ * by [ShipCargoDto.toDomain] for each entry in the cargo inventory array.
+ *
+ * @return The domain model built from this DTO's cargo-item data.
+ */
+fun CargoItemDto.toDomain(): CargoItem = CargoItem(
+    symbol = symbol,
+    name = name,
+    description = description,
+    units = units
 )
 
 /**
