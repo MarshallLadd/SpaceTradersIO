@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
@@ -131,5 +133,30 @@ sqldelight {
             packageName.set("com.brokenhuskysledteam.spacetradersio.sdk.data.db")
             dialect(libs.sqldelight.dialect)
         }
+    }
+}
+
+// ── Live end-to-end tests (opt-in) ───────────────────────────────────────────
+// Tests named *LiveTest hit the real SpaceTraders API. They self-skip unless
+// enabled here, so normal builds and CI never touch the network. Enable with:
+//
+//   ./gradlew :spacetradersiosdk:testAndroidHostTest -Pe2e --tests "*LiveTest"
+//
+// The account token is read from secrets.properties at the repo root (gitignored)
+// or the SPACETRADERS_ACCOUNT_TOKEN environment variable, and forwarded to the test
+// JVM as a system property. -Pe2e is used (not an env var) because Gradle does not
+// reliably forward shell environment variables to the test worker JVM.
+tasks.withType<Test>().configureEach {
+    val e2eEnabled = project.hasProperty("e2e") || System.getenv("SPACETRADERS_E2E") == "1"
+    if (e2eEnabled) {
+        systemProperty("spacetraders.e2e.enabled", "true")
+        val secrets = rootProject.file("secrets.properties")
+        val fileToken = if (secrets.exists()) {
+            Properties()
+                .apply { secrets.inputStream().use { load(it) } }
+                .getProperty("spacetraders.accountToken")
+        } else null
+        val token = System.getenv("SPACETRADERS_ACCOUNT_TOKEN") ?: fileToken
+        if (token != null) systemProperty("spacetraders.e2e.accountToken", token)
     }
 }
