@@ -1282,6 +1282,14 @@ They are **opt-in**. Every test's first line is `assumeE2eEnabled()`, which skip
 > ⚠️ **Gotcha — enable live tests with `-Pe2e`, never a shell env var:**
 > Gradle does not reliably forward the invoking shell's environment variables to the forked test worker JVM (the daemon may already be running with a stale environment). Enable live tests with the `-Pe2e` project property, which `build.gradle.kts` translates into a system property the test JVM can read. `System.getenv(...)` inside a test is unreliable for this.
 
+### Read-Through Repositories for Volatile Data (Markets)
+
+Most repositories in this SDK are offline-first: they cache to SQLDelight and expose a reactive `Flow`. `MarketRepository` deliberately breaks that mould. Market prices change with every trade any player makes, so a cache would serve stale prices. `MarketRepositoryImpl.getMarket` therefore fetches fresh from the network on every call and maps straight to the domain model — no DB table, no flow. Reserve the offline-first pattern for data that is stable between fetches (agent, ships, contracts, waypoints); use a read-through repository for anything that is only meaningful live.
+
+The market ViewModel holds the fetched `Market` in its `LocalState` (a one-shot value, re-fetched on demand), but it still `combine`s the *reactive* `AgentRepository.observeAgent()` so the displayed credit balance updates the instant a trade writes the new agent — the volatile part is read-through, the stable part stays reactive.
+
+Buy and sell are use cases, not repository methods, because a single trade touches two repositories: `BuyCargoUseCase`/`SellCargoUseCase` mirror `RefuelShipUseCase` exactly — the `POST /purchase` or `/sell` response returns `{cargo, agent, transaction}`, and the use case distributes `cargo` to `FleetRepository` and `agent` to `AgentRepository` (and returns the transaction). Like the refuel use case, they are unscoped in Hilt because they depend on the session-scoped `FleetRepository`.
+
 ### Cargo Inventory Persistence (JSON Column)
 
 A ship's `cargo.inventory` (`List<CargoItem>`) is persisted as a single JSON string in the `cargo_inventory TEXT` column on the `ship` row, rather than a separate child table. This is deliberate: cargo inventory is a value list bound 1:1 to a ship, always read and written together with the aggregate `cargo_units`/`cargo_capacity`, and never queried on its own. That is exactly the shape where a serialized column is simpler and cheaper than relational rows — it keeps the surgical `updateShipCargo` a single-row `UPDATE` instead of multi-table transaction choreography. `ShipDbMapper` owns the `Json` encode/decode, and `CargoItem` is annotated `@Serializable` solely to support this column.
