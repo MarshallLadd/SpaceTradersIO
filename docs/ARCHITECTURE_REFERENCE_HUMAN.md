@@ -1264,3 +1264,26 @@ class FooViewModelTest {
 
 > ⚠️ **Gotcha — Fake repository `MutableStateFlow` must start empty in tests:**
 > When writing fake repositories for ViewModel tests, initialize the backing `MutableStateFlow<Map<String, T>>(emptyMap())` — not pre-populated. Populate it only inside the `refreshXxx()` method. If you pre-populate it, the error-state test cases will fail because the Flow already has data before any refresh runs — the error path never clears it. The pattern: `_ships = MutableStateFlow(emptyMap())`, and `refreshMyShips()` sets `_ships.value = ships.associateBy { it.symbol }` only after checking for the fake's configured exception.
+
+### Live E2E Testing (Real API)
+
+Unit tests with `MockEngine` prove the SDK behaves correctly against *canned* responses. To prove it behaves correctly against the **real, evolving** SpaceTraders API, each feature slice also has a live end-to-end test.
+
+`*LiveTest` classes live in `androidHostTest/.../e2e/`. They register a fresh throwaway agent against the real API and drive the actual gameplay loop the feature unlocks (buy → sell, mine → sell, etc.), asserting on real server state. Because they run on the JVM host (no emulator), they use a **real** `SpaceTradersClient` — `httpClientFactory = null` selects the OkHttp engine on the classpath rather than a `MockEngine`.
+
+They are **opt-in**. Every test's first line is `assumeE2eEnabled()`, which skips it unless the build was invoked with `-Pe2e`. That flag (wired in the SDK `build.gradle.kts`) reads the account token from the gitignored `secrets.properties` and forwards it to the test JVM as a system property. So normal `testAndroidHostTest` runs — and CI — never touch the network or need a token.
+
+```bash
+./gradlew :spacetradersiosdk:testAndroidHostTest -Pe2e --tests "*LiveTest"
+```
+
+`registerE2eAgent()` (in `e2e/E2eSupport.kt`) registers a new agent with a randomized callsign per run and stores the returned agent token in a `FakeTokenRepository`, so the session is reproducible and survives SpaceTraders' periodic season resets. Live tests use `runBlocking`, not `runTest` — real network calls need real elapsed time, and `runTest`'s virtual clock would fight the OkHttp engine.
+
+> ⚠️ **Gotcha — enable live tests with `-Pe2e`, never a shell env var:**
+> Gradle does not reliably forward the invoking shell's environment variables to the forked test worker JVM (the daemon may already be running with a stale environment). Enable live tests with the `-Pe2e` project property, which `build.gradle.kts` translates into a system property the test JVM can read. `System.getenv(...)` inside a test is unreliable for this.
+
+### Cargo Inventory Persistence (JSON Column)
+
+A ship's `cargo.inventory` (`List<CargoItem>`) is persisted as a single JSON string in the `cargo_inventory TEXT` column on the `ship` row, rather than a separate child table. This is deliberate: cargo inventory is a value list bound 1:1 to a ship, always read and written together with the aggregate `cargo_units`/`cargo_capacity`, and never queried on its own. That is exactly the shape where a serialized column is simpler and cheaper than relational rows — it keeps the surgical `updateShipCargo` a single-row `UPDATE` instead of multi-table transaction choreography. `ShipDbMapper` owns the `Json` encode/decode, and `CargoItem` is annotated `@Serializable` solely to support this column.
+
+This contrasts with the **Fog-of-War with Nullable Lists** case above (the shipyard's ship list), where the list genuinely needs relational rows plus a sentinel column because it is nullable (fog-of-war) and its emptiness must be distinguishable from "unknown". Cargo inventory is never null — an empty hold is simply `"[]"` — so no sentinel is needed.
