@@ -1,6 +1,8 @@
 package com.brokenhuskysledteam.spacetradersio.ui.systemmap
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -113,6 +122,12 @@ fun SystemMapScreenContent(
             }
 
             else -> {
+                // Local (composable-owned) view state: whether the spatial map canvas is shown,
+                // and which waypoint the user tapped on the canvas. Kept here rather than in the
+                // ViewModel because it is pure presentation state with no domain meaning.
+                var showMap by remember { mutableStateOf(true) }
+                var selectedMapWaypoint by remember { mutableStateOf<WaypointSummary?>(null) }
+
                 // Hierarchical LazyColumn: parent waypoints and their orbitals are rendered as
                 // flat list items. Nested LazyColumns are not allowed in Compose (they conflict
                 // with the parent's scroll measurement), so orbital items are emitted as
@@ -139,10 +154,51 @@ fun SystemMapScreenContent(
                             )
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                        SortBar(uiState = uiState, onEvent = onEvent)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FilterChipRow(uiState = uiState, onEvent = onEvent)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        // LIST / MAP view toggle.
+                        Row {
+                            TerminalButton(
+                                text = if (showMap) "● MAP" else "○ MAP",
+                                onClick = { showMap = true },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TerminalButton(
+                                text = if (!showMap) "● LIST" else "○ LIST",
+                                onClick = { showMap = false },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        if (!showMap) {
+                            SortBar(uiState = uiState, onEvent = onEvent)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FilterChipRow(uiState = uiState, onEvent = onEvent)
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    // Spatial map: a Canvas plot of all waypoints by coordinate. Tapping a dot
+                    // selects it and reveals a Navigate affordance below.
+                    if (showMap) {
+                        item {
+                            SystemMapCanvas(
+                                waypoints = uiState.waypoints.flattenSummaries(),
+                                shipLocation = uiState.selectedShip?.let { it.x to it.y },
+                                selected = selectedMapWaypoint,
+                                onSelect = { selectedMapWaypoint = it }
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            selectedMapWaypoint?.let { wp ->
+                                SelectedWaypointCard(
+                                    waypoint = wp,
+                                    showNavigate = uiState.selectedShip != null
+                                        && wp.symbol != uiState.selectedShip.waypointSymbol
+                                        && uiState.selectedShip.navStatus != ShipNavStatus.IN_TRANSIT,
+                                    onNavigate = { onEvent(SystemMapEvent.NavigateToWaypoint(wp.symbol)) }
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
                     }
 
                     // Inline error shown when a refresh fails but cached waypoints are present.
@@ -166,17 +222,21 @@ fun SystemMapScreenContent(
                     // Render each root waypoint node. WaypointRow recursively appends its
                     // orbital children as additional composables within the same LazyColumn
                     // frame via the forEach loop at the bottom of WaypointRow.
-                    items(uiState.waypoints, key = { it.waypoint.symbol }) { node ->
-                        WaypointRow(
-                            node = node,
-                            isCurrentLocation = node.waypoint.symbol == uiState.focusWaypointSymbol,
-                            showNavigateButton = uiState.selectedShip != null
-                                && node.waypoint.symbol != uiState.selectedShip.waypointSymbol
-                                && uiState.selectedShip.navStatus != ShipNavStatus.IN_TRANSIT,
-                            isActionInProgress = uiState.isActionInProgress,
-                            indentLevel = 0,
-                            onNavigate = { onEvent(SystemMapEvent.NavigateToWaypoint(it)) }
-                        )
+                    // In LIST mode, render the hierarchical waypoint rows. (MAP mode shows the
+                    // canvas plot instead, added above.)
+                    if (!showMap) {
+                        items(uiState.waypoints, key = { it.waypoint.symbol }) { node ->
+                            WaypointRow(
+                                node = node,
+                                isCurrentLocation = node.waypoint.symbol == uiState.focusWaypointSymbol,
+                                showNavigateButton = uiState.selectedShip != null
+                                    && node.waypoint.symbol != uiState.selectedShip.waypointSymbol
+                                    && uiState.selectedShip.navStatus != ShipNavStatus.IN_TRANSIT,
+                                isActionInProgress = uiState.isActionInProgress,
+                                indentLevel = 0,
+                                onNavigate = { onEvent(SystemMapEvent.NavigateToWaypoint(it)) }
+                            )
+                        }
                     }
                 }
             }
@@ -431,5 +491,116 @@ private fun ActionResultCard(result: SystemMapActionResult, onDismiss: () -> Uni
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+/** Flattens the waypoint tree (parents + orbitals) into a single list of summaries for plotting. */
+private fun List<WaypointNode>.flattenSummaries(): List<WaypointSummary> =
+    flatMap { listOf(it.waypoint) + it.orbitals.flattenSummaries() }
+
+/**
+ * A 2-D spatial plot of the system's waypoints on a [Canvas], scaled to fit their coordinate
+ * bounds. Each waypoint is a dot coloured by its salient trait (marketplace/shipyard/uncharted);
+ * the selected ship's location is drawn as a ring ("you are here"). Tapping near a dot selects
+ * that waypoint via [onSelect]. This is the spatial upgrade to the waypoint list — coordinates
+ * that were previously text are now plotted.
+ */
+@Composable
+private fun SystemMapCanvas(
+    waypoints: List<WaypointSummary>,
+    shipLocation: Pair<Int, Int>?,
+    selected: WaypointSummary?,
+    onSelect: (WaypointSummary) -> Unit
+) {
+    if (waypoints.isEmpty()) {
+        TerminalCard(title = "MAP") {
+            Text("NO WAYPOINTS TO PLOT.", color = MaterialTheme.colorScheme.tertiary)
+        }
+        return
+    }
+
+    val marketColor = MaterialTheme.colorScheme.primary
+    val shipyardColor = MaterialTheme.colorScheme.tertiary
+    val dimColor = MaterialTheme.colorScheme.outline
+    val defaultColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val ringColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+
+    val xs = waypoints.map { it.x } + listOfNotNull(shipLocation?.first)
+    val ys = waypoints.map { it.y } + listOfNotNull(shipLocation?.second)
+    val minX = xs.min().toFloat(); val spanX = (xs.max() - xs.min()).coerceAtLeast(1).toFloat()
+    val minY = ys.min().toFloat(); val spanY = (ys.max() - ys.min()).coerceAtLeast(1).toFloat()
+    val margin = 0.12f
+
+    // Maps data coordinates to canvas pixels (y inverted so higher y is up). Shared by the draw
+    // pass and the tap hit-test so both agree on where each dot is.
+    fun project(x: Float, y: Float, w: Float, h: Float): Offset {
+        val nx = (x - minX) / spanX
+        val ny = (y - minY) / spanY
+        return Offset((margin + nx * (1 - 2 * margin)) * w, (margin + (1 - ny) * (1 - 2 * margin)) * h)
+    }
+    fun colorFor(wp: WaypointSummary): Color = when {
+        wp.isUncharted -> dimColor
+        wp.hasShipyard -> shipyardColor
+        wp.hasMarketplace -> marketColor
+        else -> defaultColor
+    }
+
+    TerminalCard(title = "MAP") {
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .pointerInput(waypoints) {
+                    detectTapGestures { tap ->
+                        val w = size.width.toFloat(); val h = size.height.toFloat()
+                        val hit = waypoints.minByOrNull { (project(it.x.toFloat(), it.y.toFloat(), w, h) - tap).getDistanceSquared() }
+                        if (hit != null && (project(hit.x.toFloat(), hit.y.toFloat(), w, h) - tap).getDistance() <= 44f) {
+                            onSelect(hit)
+                        }
+                    }
+                }
+        ) {
+            // Faint center crosshair at system origin (0,0), if within bounds.
+            val origin = project(0f, 0f, size.width, size.height)
+            drawLine(gridColor, Offset(0f, origin.y), Offset(size.width, origin.y))
+            drawLine(gridColor, Offset(origin.x, 0f), Offset(origin.x, size.height))
+
+            waypoints.forEach { wp ->
+                val o = project(wp.x.toFloat(), wp.y.toFloat(), size.width, size.height)
+                drawCircle(colorFor(wp), radius = if (wp == selected) 10f else 5f, center = o)
+                if (wp == selected) drawCircle(ringColor, radius = 14f, center = o, style = Stroke(width = 2f))
+            }
+            shipLocation?.let { (sx, sy) ->
+                val o = project(sx.toFloat(), sy.toFloat(), size.width, size.height)
+                drawCircle(shipyardColor, radius = 9f, center = o, style = Stroke(width = 3f))
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "◍ MARKET  ◍ SHIPYARD  ○ YOUR SHIP  •  TAP A DOT",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+    }
+}
+
+/** Info + Navigate affordance for the waypoint the user tapped on the [SystemMapCanvas]. */
+@Composable
+private fun SelectedWaypointCard(
+    waypoint: WaypointSummary,
+    showNavigate: Boolean,
+    onNavigate: () -> Unit
+) {
+    TerminalCard(title = waypoint.symbol) {
+        Text(waypoint.type.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        val traits = waypoint.traits.joinToString { it.name }
+        if (traits.isNotBlank()) {
+            Text(traits, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+        }
+        if (showNavigate) {
+            Spacer(modifier = Modifier.height(8.dp))
+            TerminalButton(text = "NAVIGATE", onClick = onNavigate, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
