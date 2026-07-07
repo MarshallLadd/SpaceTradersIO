@@ -2,6 +2,7 @@ package com.brokenhuskysledteam.spacetradersio
 
 import android.app.Application
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.brokenhuskysledteam.loggerkit.LoggerKit
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -48,5 +49,7 @@ class SpaceTradersApplication : Application() {
         // foreground from any Activity and onStop when the last visible Activity is stopped —
         // exactly the coarse app-level signal we need for refresh-timer management.
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
+
+        LoggerKit.configure(isDebug = true)
     }
 }

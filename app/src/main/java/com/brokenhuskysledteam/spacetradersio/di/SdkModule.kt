@@ -15,10 +15,12 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SqlDriverFactory
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.AgentRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ContractRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ShipyardRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ShipyardRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
@@ -28,12 +30,16 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManager
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.session.SessionManagerImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStore
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.FulfillContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.GetMyContractsUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NegotiateContractUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NegotiateContractUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.OrbitShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCase
@@ -325,6 +331,13 @@ object SdkModule {
         database: SpaceTradersDatabase
     ): ShipyardRepository = ShipyardRepositoryImpl(shipyardApi, fleetRepository, agentRepository, database)
 
+    @Provides
+    @Singleton
+    fun provideContractRepository(
+        contractsApi: ContractsApi,
+        database: SpaceTradersDatabase
+    ): ContractRepository = ContractRepositoryImpl(contractsApi, database)
+
     // -----------------------------------------------------------------------------------------
     // Use Cases
     // -----------------------------------------------------------------------------------------
@@ -448,4 +461,16 @@ object SdkModule {
         fleetRepository: FleetRepository,
         orbitShipUseCase: OrbitShipUseCase
     ): NavigateShipUseCase = NavigateShipUseCaseImpl(fleetApi, fleetRepository, orbitShipUseCase)
+
+    @Provides
+    fun provideNegotiateContractUseCase(
+        fleetApi: FleetApi,
+        contractRepository: ContractRepository
+    ): NegotiateContractUseCase = NegotiateContractUseCaseImpl(fleetApi, contractRepository)
+
+    @Provides
+    fun provideDeliverCargoUseCase(
+        contractsApi: ContractsApi,
+        contractRepository: ContractRepository
+    ): DeliverCargoUseCase = DeliverCargoUseCaseImpl(contractsApi, contractRepository)
 }

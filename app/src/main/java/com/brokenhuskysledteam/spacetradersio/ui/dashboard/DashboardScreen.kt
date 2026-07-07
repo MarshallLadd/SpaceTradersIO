@@ -47,6 +47,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.components.TerminalCard
 fun DashboardScreen(
     onNavigateToAuth: () -> Unit,
     onNavigateToShipList: () -> Unit,
+    onNavigateToContracts: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -59,6 +60,7 @@ fun DashboardScreen(
             when (target) {
                 NavigationTarget.Auth -> onNavigateToAuth()
                 NavigationTarget.ShipList -> onNavigateToShipList()
+                NavigationTarget.ContractsScreen -> onNavigateToContracts()
                 // Other targets are not handled by this screen; ignore them.
                 else -> {}
             }
@@ -191,14 +193,20 @@ fun DashboardScreenContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // The Fleet card is tappable: clicking it dispatches FleetCardClicked,
-                    // which the ViewModel converts into a NavigationTarget.ShipList event
-                    // collected by the stateful DashboardScreen above.
                     TerminalCard(
                         title = "Fleet",
                         modifier = Modifier.clickable { onEvent(DashboardEvent.FleetCardClicked) }
                     ) {
                         TerminalDataRow("SHIPS", uiState.agent.shipCount.toString())
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TerminalCard(
+                        title = "Contracts",
+                        modifier = Modifier.clickable { onEvent(DashboardEvent.ContractsCardClicked) }
+                    ) {
+                        TerminalDataRow("STATUS", "TAP TO VIEW")
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))

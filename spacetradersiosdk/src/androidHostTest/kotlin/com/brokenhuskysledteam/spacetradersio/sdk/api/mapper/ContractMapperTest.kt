@@ -1,8 +1,10 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.api.mapper
 
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDeliverGoodDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractPaymentDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractTermsDto
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,63 +12,117 @@ import kotlin.time.Instant
 
 class ContractMapperTest {
 
-    private val deadline = "2025-06-15T12:00:00.000Z"
-    private val deadlineInstant = Instant.parse(deadline)
+    private val futureDeadline = "2099-01-01T00:00:00.000Z"
+    private val pastDeadline   = "2000-01-01T00:00:00.000Z"
+    private val fixedNow       = Instant.parse("2026-04-27T12:00:00Z")
 
-    private fun minimalDto(
-        type: String = "PROCUREMENT",
-        expiration: String = "2025-05-01T00:00:00.000Z",
-        deadlineToAccept: String? = "2025-05-10T00:00:00.000Z"
+    private fun makeDto(
+        accepted: Boolean = false,
+        fulfilled: Boolean = false,
+        deadlineToAccept: String? = futureDeadline,
+        termsDeadline: String = futureDeadline,
+        deliver: List<ContractDeliverGoodDto> = emptyList(),
+        type: String = "PROCUREMENT"
     ) = ContractDto(
-        id = "contract-1",
+        id = "C-001",
         factionSymbol = "COSMIC",
         type = type,
         terms = ContractTermsDto(
-            deadline = deadline,
-            payment = ContractPaymentDto(onAccepted = 1000, onFulfilled = 5000),
-            deliver = emptyList()
+            deadline = termsDeadline,
+            payment = ContractPaymentDto(onAccepted = 100, onFulfilled = 900),
+            deliver = deliver
         ),
-        accepted = false,
-        fulfilled = false,
-        expiration = expiration,
+        accepted = accepted,
+        fulfilled = fulfilled,
+        expiration = futureDeadline,
         deadlineToAccept = deadlineToAccept
     )
 
-    @Test
-    fun toDomain_allFieldsMapCorrectly() {
-        val dto = minimalDto()
-        val domain = dto.toDomain()
+    // --- Basic field mapping ---
 
-        assertEquals("contract-1", domain.id)
+    @Test
+    fun maps_all_basic_fields() {
+        val domain = makeDto().toDomain(fixedNow)
+        assertEquals("C-001", domain.id)
         assertEquals("COSMIC", domain.factionSymbol)
         assertEquals(ContractType.PROCUREMENT, domain.type)
         assertEquals(false, domain.accepted)
         assertEquals(false, domain.fulfilled)
-        assertEquals(deadlineInstant, domain.terms.deadline)
-        assertEquals(1000, domain.terms.paymentOnAccepted)
-        assertEquals(5000, domain.terms.paymentOnFulfilled)
+        assertEquals(100, domain.terms.paymentOnAccepted)
+        assertEquals(900, domain.terms.paymentOnFulfilled)
     }
 
     @Test
-    fun toDomain_deadlineToAcceptPresent_usesDeadlineToAccept() {
-        val acceptBy = "2025-05-10T00:00:00.000Z"
-        val dto = minimalDto(deadlineToAccept = acceptBy)
-
-        assertEquals(Instant.parse(acceptBy), dto.toDomain().deadlineToAccept)
+    fun uses_deadlineToAccept_when_present() {
+        val domain = makeDto(deadlineToAccept = futureDeadline).toDomain(fixedNow)
+        assertEquals(Instant.parse(futureDeadline), domain.deadlineToAccept)
     }
 
     @Test
-    fun toDomain_deadlineToAcceptNull_fallsBackToExpiration() {
-        val expiration = "2025-05-01T00:00:00.000Z"
-        val dto = minimalDto(expiration = expiration, deadlineToAccept = null)
-
-        assertEquals(Instant.parse(expiration), dto.toDomain().deadlineToAccept)
+    fun falls_back_to_expiration_when_deadlineToAccept_null() {
+        val domain = makeDto(deadlineToAccept = null).toDomain(fixedNow)
+        // expiration = futureDeadline in makeDto
+        assertEquals(Instant.parse(futureDeadline), domain.deadlineToAccept)
+        assertEquals(ContractStatus.UNACCEPTED, domain.status)
     }
 
     @Test
-    fun toDomain_unknownContractType_fallsBackToProcurement() {
-        val dto = minimalDto(type = "FUTURE_TYPE")
+    fun unknown_contract_type_falls_back_to_procurement() {
+        val domain = makeDto(type = "FUTURE_TYPE").toDomain(fixedNow)
+        assertEquals(ContractType.PROCUREMENT, domain.type)
+    }
 
-        assertEquals(ContractType.PROCUREMENT, dto.toDomain().type)
+    // --- Status computation ---
+
+    @Test
+    fun maps_unaccepted_status() {
+        val domain = makeDto(accepted = false, deadlineToAccept = futureDeadline).toDomain(fixedNow)
+        assertEquals(ContractStatus.UNACCEPTED, domain.status)
+    }
+
+    @Test
+    fun maps_expired_status() {
+        val domain = makeDto(accepted = false, deadlineToAccept = pastDeadline).toDomain(fixedNow)
+        assertEquals(ContractStatus.EXPIRED, domain.status)
+    }
+
+    @Test
+    fun maps_active_status() {
+        val domain = makeDto(accepted = true, fulfilled = false, termsDeadline = futureDeadline).toDomain(fixedNow)
+        assertEquals(ContractStatus.ACTIVE, domain.status)
+    }
+
+    @Test
+    fun maps_failed_status() {
+        val domain = makeDto(accepted = true, fulfilled = false, termsDeadline = pastDeadline).toDomain(fixedNow)
+        assertEquals(ContractStatus.FAILED, domain.status)
+    }
+
+    @Test
+    fun maps_fulfilled_status() {
+        val domain = makeDto(accepted = true, fulfilled = true).toDomain(fixedNow)
+        assertEquals(ContractStatus.FULFILLED, domain.status)
+    }
+
+    // --- Deliver goods mapping ---
+
+    @Test
+    fun maps_deliver_goods() {
+        val dto = makeDto(deliver = listOf(
+            ContractDeliverGoodDto("IRON_ORE", "X1-AB-001", unitsRequired = 50, unitsFulfilled = 12)
+        ))
+        val domain = dto.toDomain(fixedNow)
+        assertEquals(1, domain.terms.deliverGoods.size)
+        val good = domain.terms.deliverGoods[0]
+        assertEquals("IRON_ORE", good.tradeSymbol)
+        assertEquals("X1-AB-001", good.destinationSymbol)
+        assertEquals(50, good.unitsRequired)
+        assertEquals(12, good.unitsFulfilled)
+    }
+
+    @Test
+    fun maps_empty_deliver_goods() {
+        val domain = makeDto().toDomain(fixedNow)
+        assertEquals(emptyList(), domain.terms.deliverGoods)
     }
 }

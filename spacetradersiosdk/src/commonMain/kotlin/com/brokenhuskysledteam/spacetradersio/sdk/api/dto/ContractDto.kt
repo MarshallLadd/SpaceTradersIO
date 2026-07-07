@@ -121,6 +121,9 @@ data class ContractPaymentDto(
  *   `unitsFulfilled >= unitsRequired`.
  */
 @Serializable
+data class NegotiateContractResponseDto(val contract: ContractDto)
+
+@Serializable
 data class ContractDeliverGoodDto(
     val tradeSymbol: String,
     val destinationSymbol: String,

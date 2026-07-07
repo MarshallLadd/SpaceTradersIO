@@ -105,6 +105,9 @@ class DashboardViewModel @Inject constructor(
             is DashboardEvent.FleetCardClicked -> viewModelScope.launch {
                 _navigationEvent.send(NavigationTarget.ShipList)
             }
+            is DashboardEvent.ContractsCardClicked -> viewModelScope.launch {
+                _navigationEvent.send(NavigationTarget.ContractsScreen)
+            }
         }
     }
 

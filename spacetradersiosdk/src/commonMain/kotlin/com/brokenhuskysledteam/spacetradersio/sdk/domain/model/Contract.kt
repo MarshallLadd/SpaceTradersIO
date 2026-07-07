@@ -1,38 +1,44 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.model
 
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractType
 import kotlin.time.Instant
 
 /**
- * Represents a mission issued by a faction that the agent can accept, fulfil, and earn
- * credits from.
+ * Represents a single SpaceTraders contract offered to or held by the player's agent.
  *
- * **Pattern:** Immutable domain model with a nested value type ([ContractTerms]). In a new
- * project, break compound API responses into focused sub-objects rather than flattening
- * everything into one large class — it keeps each type cohesive and makes `copy()` calls
- * on individual sub-objects easy when only part of the state changes.
+ * **Pattern:** Immutable domain model. Like all models in `domain/model/`, this class has
+ * no serialization annotations and no platform imports — it is pure Kotlin and usable in
+ * `commonMain` across Android and iOS. The wire DTO is translated into this type by
+ * `ContractMapper` in `api/mapper/`; callers in the UI and ViewModel layers never touch
+ * the DTO directly.
  *
- * **In this project:** Contracts are fetched from `/my/contracts`, mapped from their DTO
- * representation in `api/mapper/`, and surfaced to the UI through the contracts repository.
- * The lifecycle of a contract (`accepted` → goods delivered → `fulfilled`) drives several
- * SDK use cases.
+ * **In this project:** `Contract` objects are observed from the local SQLDelight cache via
+ * [com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository.observeContracts].
+ * The ContractsScreen displays them in a tabbed list (ACTIVE vs HISTORY). Accept and Fulfill
+ * actions call back through the repository and return an updated `Contract`.
  *
- * @property id The server-assigned unique identifier for this contract. Used as the
- *   primary key in all contract-related API calls (accept, deliver, fulfil).
- * @property factionSymbol The faction that issued the contract (e.g. `"COSMIC"`).
- * @property type Classifies the mission as procurement, transport, or shuttle work.
- *   See [ContractType] for the full enumeration.
- * @property accepted `true` once the agent has explicitly accepted the contract via
- *   `POST /my/contracts/{contractId}/accept`. Unaccepted contracts expire.
- * @property fulfilled `true` when all delivery requirements have been met and the final
- *   payment has been collected via `POST /my/contracts/{contractId}/fulfill`.
- * @property deadlineToAccept The latest point in time the agent may accept this contract.
- *   `null` on older contracts that use the deprecated `expiration` field instead — the
- *   mapper promotes `expiration` into this property when `deadlineToAccept` is absent.
- *   Using [kotlinx.datetime.Instant] (platform-neutral) rather than `java.util.Date`
- *   keeps this type usable in `commonMain` on both Android and iOS.
- * @property terms The payment schedule and delivery deadline. Modelled as a separate
- *   [ContractTerms] object because the API nests them under a `terms` key.
+ * **Contract lifecycle:** `UNACCEPTED → ACTIVE → FULFILLED` (or `EXPIRED`/`CANCELLED`).
+ * Only `UNACCEPTED` contracts show an Accept button; only `ACTIVE` contracts with all goods
+ * delivered show a Fulfill button.
+ *
+ * @property id Unique contract identifier. Used as the primary key in the local database
+ *   and as the argument to `acceptContract` / `fulfillContract` API calls.
+ * @property factionSymbol The faction that issued this contract (e.g. `"COSMIC"`).
+ * @property type The contract category — `PROCUREMENT`, `TRANSPORT`, or `SHUTTLE`.
+ *   Determines whether [ContractTerms.deliverGoods] will be non-empty.
+ * @property accepted Raw API field — `true` once the player has accepted the contract.
+ *   Used by [ContractMapper] to compute [status]; prefer reading [status] in UI code.
+ * @property fulfilled Raw API field — `true` once the player has fulfilled the contract.
+ *   Used by [ContractMapper] to compute [status]; prefer reading [status] in UI code.
+ * @property deadlineToAccept The timestamp by which the contract must be accepted, or
+ *   `null` if the contract has already been accepted (the API omits this field after
+ *   acceptance). Only relevant for `UNACCEPTED` contracts.
+ * @property terms Payment and delivery obligations — see [ContractTerms].
+ * @property status Computed lifecycle status synthesised from [accepted] and [fulfilled]
+ *   at the mapper boundary (see `ContractMapper`). This field is **not** present in the
+ *   raw API response; it is derived and stored locally so the repository can filter by
+ *   tab (ACTIVE vs HISTORY) with a simple SQL `WHERE status = ?` clause.
  */
 data class Contract(
     val id: String,
@@ -40,32 +46,55 @@ data class Contract(
     val type: ContractType,
     val accepted: Boolean,
     val fulfilled: Boolean,
-    // deadlineToAccept supersedes the deprecated expiration field.
-    // Both are kept here to handle contracts that only provide expiration.
     val deadlineToAccept: Instant?,
-    val terms: ContractTerms
+    val terms: ContractTerms,
+    val status: ContractStatus
 )
 
 /**
- * The financial and time terms attached to a [Contract].
+ * Payment schedule and delivery requirements for a [Contract].
  *
- * **Pattern:** Nested value object. Extracting a cohesive group of related fields into its
- * own `data class` avoids bloating the parent and makes the sub-object independently
- * copyable — useful if only payment amounts change in a future SDK version.
+ * **In this project:** Rendered by `ContractItem` in `ContractsScreen` and by the delivery
+ * dialog in `ShipDetailScreen`. `paymentOnAccepted` is paid immediately when the player
+ * accepts; `paymentOnFulfilled` is paid when the player calls Fulfill after all goods
+ * are delivered.
  *
- * **In this project:** Rendered directly in the contracts list UI to show the agent what
- * they will earn by accepting and fulfilling the contract.
- *
- * @property deadline The point in time by which all deliveries must be completed to
- *   qualify for the fulfilment payment. Stored as [kotlinx.datetime.Instant] so that
- *   time-until-deadline can be computed without platform-specific date APIs.
- * @property paymentOnAccepted Credits awarded immediately when the contract is accepted.
- *   Provides upfront capital for fuel and cargo purchases needed to complete the job.
- * @property paymentOnFulfilled Credits awarded when all goods are delivered and
- *   `fulfill` is called. This is typically the larger portion of the total payout.
+ * @property deadline The UTC timestamp by which all goods must be delivered and the
+ *   contract fulfilled. Displayed in the accept-confirmation dialog.
+ * @property paymentOnAccepted Credits deposited immediately on acceptance. May be `0`
+ *   for some contract types.
+ * @property paymentOnFulfilled Credits deposited when the contract is fulfilled.
+ * @property deliverGoods The list of cargo deliveries required to complete the contract.
+ *   Empty for `TRANSPORT` and `SHUTTLE` contracts that have no cargo requirement;
+ *   non-empty for `PROCUREMENT` contracts. See [ContractDeliverGood].
  */
 data class ContractTerms(
     val deadline: Instant,
     val paymentOnAccepted: Int,
-    val paymentOnFulfilled: Int
+    val paymentOnFulfilled: Int,
+    val deliverGoods: List<ContractDeliverGood> = emptyList()
+)
+
+/**
+ * A single cargo delivery requirement within a [ContractTerms].
+ *
+ * **In this project:** Each `ContractDeliverGood` is rendered as one progress row inside
+ * `ContractItem` (e.g. `"IRON_ORE  42/100 @ X1-OE-A005"`). The `ShipDetailScreen` uses
+ * this type to populate the deliver-cargo dialog's contract and good dropdowns. A contract
+ * is considered ready to fulfill when every good has `unitsFulfilled >= unitsRequired`.
+ *
+ * @property tradeSymbol The cargo type to deliver (e.g. `"IRON_ORE"`). Matches the
+ *   `symbol` of a ship's cargo inventory item.
+ * @property destinationSymbol The waypoint where the cargo must be delivered
+ *   (e.g. `"X1-OE-A005"`). The ship must be docked at this waypoint to call
+ *   the deliver-cargo endpoint.
+ * @property unitsRequired The total units of [tradeSymbol] the contract requires.
+ * @property unitsFulfilled The units already delivered. Updated by the API after each
+ *   successful deliver-cargo call and stored in the local `contract_deliver_good` table.
+ */
+data class ContractDeliverGood(
+    val tradeSymbol: String,
+    val destinationSymbol: String,
+    val unitsRequired: Int,
+    val unitsFulfilled: Int
 )

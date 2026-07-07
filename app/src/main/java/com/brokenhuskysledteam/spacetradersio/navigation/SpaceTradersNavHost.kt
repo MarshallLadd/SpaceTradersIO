@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
+import com.brokenhuskysledteam.spacetradersio.ui.contracts.ContractsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
@@ -81,15 +82,14 @@ fun SpaceTradersNavHost(
             DashboardScreen(
                 onNavigateToAuth = {
                     navController.navigate(AuthRoute) {
-                        // Remove DashboardRoute (inclusive) on logout so the now-unauthenticated
-                        // dashboard is not reachable via Back after the user is sent to Auth.
                         popUpTo<DashboardRoute> { inclusive = true }
                     }
                 },
                 onNavigateToShipList = {
-                    // Standard forward navigation — DashboardRoute stays on the back stack so
-                    // Back from the ship list returns here as expected.
                     navController.navigate(ShipListRoute)
+                },
+                onNavigateToContracts = {
+                    navController.navigate(ContractsRoute)
                 }
             )
         }
@@ -121,6 +121,11 @@ fun SpaceTradersNavHost(
                     navController.navigate(ShipyardRoute(systemSymbol, waypointSymbol))
                 }
             )
+        }
+
+        // --- Contracts screen ---
+        composable<ContractsRoute> {
+            ContractsScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- Shipyard screen ---

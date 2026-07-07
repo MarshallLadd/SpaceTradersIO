@@ -89,4 +89,6 @@ sealed interface NavigationTarget {
     ) : NavigationTarget
 
     data class ShipyardScreen(val systemSymbol: String, val waypointSymbol: String) : NavigationTarget
+
+    data object ContractsScreen : NavigationTarget
 }

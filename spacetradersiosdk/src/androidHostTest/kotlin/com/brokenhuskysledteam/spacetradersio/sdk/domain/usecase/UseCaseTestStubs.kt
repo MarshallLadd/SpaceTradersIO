@@ -1,5 +1,6 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase
 
+import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ContractDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.NavigateResponseDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.PaginatedResponse
 import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.RefuelResponseDto
@@ -17,4 +18,5 @@ internal object StubFleetApi : FleetApi {
     override suspend fun dockShip(shipSymbol: String): ShipNavDto = throw UnsupportedOperationException()
     override suspend fun refuelShip(shipSymbol: String): RefuelResponseDto = throw UnsupportedOperationException()
     override suspend fun navigateShip(shipSymbol: String, waypointSymbol: String): NavigateResponseDto = throw UnsupportedOperationException()
+    override suspend fun negotiateContract(shipSymbol: String): ContractDto = throw UnsupportedOperationException()
 }
