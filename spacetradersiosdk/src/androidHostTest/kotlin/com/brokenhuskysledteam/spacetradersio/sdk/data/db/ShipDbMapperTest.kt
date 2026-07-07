@@ -1,5 +1,6 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.data.db
 
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.CargoItem
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
@@ -116,9 +117,46 @@ class ShipDbMapperTest {
     fun updateShipCargo_updatesOnlyCargoFields() {
         val db = createTestDatabase()
         db.shipQueries.upsertShip(testShip)
-        db.shipQueries.updateShipCargo(cargo_units = 20, cargo_capacity = 40, symbol = "LADD-1")
+        db.shipQueries.updateShipCargo(ShipCargo(units = 20, capacity = 40), "LADD-1")
         val result = db.shipQueries.selectShipBySymbol("LADD-1").executeAsOne().toDomain()
         assertEquals(20, result.cargo.units)
+        assertEquals(ShipNavStatus.DOCKED, result.nav.status) // nav unchanged
+    }
+
+    @Test
+    fun roundTrip_cargoInventory_isPreserved() {
+        val db = createTestDatabase()
+        val inventory = listOf(
+            CargoItem("IRON_ORE", "Iron Ore", "Raw iron ore.", 12),
+            CargoItem("FUEL", "Fuel", "High-grade fuel.", 3)
+        )
+        val ship = testShip.copy(cargo = ShipCargo(units = 15, capacity = 40, inventory = inventory))
+        db.shipQueries.upsertShip(ship)
+        val result = db.shipQueries.selectShipBySymbol("LADD-1").executeAsOne().toDomain()
+        assertEquals(inventory, result.cargo.inventory)
+        assertEquals(ship, result)
+    }
+
+    @Test
+    fun roundTrip_emptyInventory_defaultsToEmptyList() {
+        val db = createTestDatabase()
+        db.shipQueries.upsertShip(testShip) // testShip has default empty inventory
+        val result = db.shipQueries.selectShipBySymbol("LADD-1").executeAsOne().toDomain()
+        assertEquals(emptyList(), result.cargo.inventory)
+    }
+
+    @Test
+    fun updateShipCargo_persistsInventory() {
+        val db = createTestDatabase()
+        db.shipQueries.upsertShip(testShip)
+        val newCargo = ShipCargo(
+            units = 4,
+            capacity = 40,
+            inventory = listOf(CargoItem("PRECIOUS_STONES", "Precious Stones", "Shiny.", 4))
+        )
+        db.shipQueries.updateShipCargo(newCargo, "LADD-1")
+        val result = db.shipQueries.selectShipBySymbol("LADD-1").executeAsOne().toDomain()
+        assertEquals(newCargo.inventory, result.cargo.inventory)
         assertEquals(ShipNavStatus.DOCKED, result.nav.status) // nav unchanged
     }
 

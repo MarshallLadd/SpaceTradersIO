@@ -194,6 +194,25 @@ fun ShipDetailScreenContent(
                             value = cargoFraction,
                             label = "${"%.0f".format(cargoFraction * 100)}%"
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // Itemised manifest of the goods currently in the hold.
+                        Text(
+                            text = "MANIFEST",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (ship.cargoInventory.isEmpty()) {
+                            Text(
+                                text = "— EMPTY HOLD —",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            ship.cargoInventory.forEach { item ->
+                                ShipDetailDataRow(item.name.uppercase(), "x${item.units}")
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
 

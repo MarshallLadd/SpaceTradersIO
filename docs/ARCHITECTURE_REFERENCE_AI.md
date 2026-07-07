@@ -565,6 +565,13 @@ class FooViewModelTest {
 }
 ```
 
+**Live E2E tests (opt-in, real API):**
+- `*LiveTest` classes in `androidHostTest/.../e2e/` hit the **real** SpaceTraders API for true end-to-end verification of each feature slice.
+- Gated by `-Pe2e` (see SDK `build.gradle.kts`), which forwards the account token from `secrets.properties` (gitignored) as a JVM system property. Without `-Pe2e` the tests self-skip via `assumeE2eEnabled()`, so normal builds/CI never touch the network.
+- Run: `./gradlew :spacetradersiosdk:testAndroidHostTest -Pe2e --tests "*LiveTest"`.
+- Build a real client with `SpaceTradersClient(tokenRepository, httpClientFactory = null)` (null factory → OkHttp engine on the JVM). `registerE2eAgent()` registers a fresh randomized-callsign agent per run and stores its token in a `FakeTokenRepository` → reproducible, reset-proof.
+- Use `runBlocking` (not `runTest`) — real network calls need real time.
+
 ---
 
 ## Critical Gotchas (quick reference)
@@ -590,3 +597,5 @@ class FooViewModelTest {
 | `ContractRepository @Singleton` is safe | `ContractRepository` depends only on `ContractsApi` and `SpaceTradersDatabase` (both singletons). Unlike `FleetRepository` (which holds `RefreshScheduler`), it has no session-scoped dep → `@Singleton` is correct. |
 | `ContractStatus` stored as TEXT in DB | Status is computed from timestamps in the mapper via `computeContractStatus()` and stored as TEXT. SQL tab queries filter by status string directly. Status can grow stale if the clock advances between refreshes — acceptable because `refreshContracts()` recomputes status on every network call. |
 | `QueryKey + flatMapLatest` in `ContractsViewModel` | Use `_localState.map { QueryKey(...) }.distinctUntilChanged().flatMapLatest { ... }` when the ViewModel must re-subscribe to a *different* SQL query (different tab/page), not just re-combine the same one. `distinctUntilChanged()` prevents `flatMapLatest` from restarting on every ephemeral `LocalState` mutation (e.g., `isLoading`, `pendingAccept`). |
+| Cargo inventory as JSON column | A ship's `cargo.inventory` list is persisted as a single JSON `cargo_inventory TEXT` column on the `ship` row (not a child table). It's a value list bound 1:1 to a ship, always read/written with the aggregate cargo counts, never queried independently — the case where a serialized column beats a child table. `ShipDbMapper` owns the `Json` encode/decode; `CargoItem` is `@Serializable` solely for this. (Contrast the fog-of-war nullable-list case, which *does* need relational rows.) |
+| Live E2E gating | `*LiveTest` classes call `assumeE2eEnabled()` first and only run under `-Pe2e`. Never rely on a shell env var to enable them — Gradle does not reliably forward env to the test worker JVM; the `-Pe2e` project property is wired to a system property in `build.gradle.kts`. |

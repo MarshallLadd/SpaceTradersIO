@@ -204,25 +204,46 @@ data class ShipNavRouteWaypointDto(
 /**
  * The ship's cargo hold summary.
  *
- * **Pattern:** Partial DTO (ignored-fields variant). The SpaceTraders API returns an
- * `inventory` array inside the cargo object listing each distinct item in the hold. This
- * project does not yet model inventory items, so only the aggregate [capacity] and [units]
- * are captured here. The deserializer silently drops the `inventory` array.
+ * **Pattern:** Nested list DTO. The SpaceTraders API returns an `inventory` array inside the
+ * cargo object listing each distinct good in the hold. Both the aggregate [capacity]/[units]
+ * and the per-good [inventory] are captured here; the mapper converts each entry to a
+ * `CargoItem` domain model.
  *
- * **In this project:** Reused across [ShipDto] and [DeliverCargoResponseDto]. The UI uses
- * these two fields to render a cargo capacity bar on the ship detail screen.
+ * **In this project:** Reused across [ShipDto], [DeliverCargoResponseDto], and the buy/sell
+ * responses (Phase 1). The UI renders a cargo capacity bar plus an itemised manifest on the
+ * ship detail screen.
  *
  * @property capacity The maximum number of cargo units this ship's hold can carry.
  * @property units The number of cargo units currently occupying the hold. The hold is full
  *   when `units == capacity`.
+ * @property inventory The distinct goods in the hold. Defaults to an empty list so responses
+ *   that omit the array (or older fixtures) deserialize without error.
  */
 @Serializable
 data class ShipCargoDto(
     val capacity: Int,
-    val units: Int
+    val units: Int,
+    val inventory: List<CargoItemDto> = emptyList()
 )
 
-// The API also returns an "inventory" array inside cargo — ignored via ignoreUnknownKeys.
+/**
+ * A single good entry within a ship's cargo [ShipCargoDto.inventory].
+ *
+ * **Pattern:** Leaf list-element DTO. Mirrors one object in the API's `cargo.inventory` array.
+ * The mapper (`ShipMapper.kt`) converts it to the `CargoItem` domain model 1:1.
+ *
+ * @property symbol The trade good's stable identifier (e.g. `"IRON_ORE"`).
+ * @property name The good's human-readable display name.
+ * @property description A short description string for the good.
+ * @property units The number of units of this good in the hold.
+ */
+@Serializable
+data class CargoItemDto(
+    val symbol: String,
+    val name: String,
+    val description: String,
+    val units: Int
+)
 
 /**
  * The ship's current fuel levels.

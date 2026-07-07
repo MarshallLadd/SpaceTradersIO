@@ -1,6 +1,7 @@
 package com.brokenhuskysledteam.spacetradersio.sdk.data.db
 
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.Ship as DbShip
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.CargoItem
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Cooldown
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ShipCargo
@@ -14,6 +15,18 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStat
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipRole
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
 import kotlin.time.Instant
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+/**
+ * JSON codec for the `cargo_inventory` column. The ship table stores the whole cargo
+ * inventory list as a single JSON array rather than a child table, because cargo inventory
+ * is a value list bound 1:1 to a ship row and is always read/written with the ship's cargo
+ * counts (never queried independently). `ignoreUnknownKeys` future-proofs against extra
+ * fields being added to persisted entries.
+ */
+private val cargoInventoryJson = Json { ignoreUnknownKeys = true }
 
 /**
  * Reconstructs a [Ship] domain model from a flat [DbShip] database row.
@@ -73,7 +86,12 @@ fun DbShip.toDomain(): Ship = Ship(
             arrivalTime = Instant.parse(route_arrival)
         )
     ),
-    cargo = ShipCargo(units = cargo_units.toInt(), capacity = cargo_capacity.toInt()),
+    cargo = ShipCargo(
+        units = cargo_units.toInt(),
+        capacity = cargo_capacity.toInt(),
+        // Inventory is stored as a JSON array; an empty/absent hold round-trips as "[]".
+        inventory = cargoInventoryJson.decodeFromString<List<CargoItem>>(cargo_inventory)
+    ),
     fuel = ShipFuel(current = fuel_current.toInt(), capacity = fuel_capacity.toInt()),
     frameName = frame_name,
     cooldown = Cooldown(
@@ -124,6 +142,7 @@ fun ShipQueries.upsertShip(ship: Ship) {
         route_arrival = ship.nav.route.arrivalTime.toString(),
         cargo_units = ship.cargo.units.toLong(),
         cargo_capacity = ship.cargo.capacity.toLong(),
+        cargo_inventory = cargoInventoryJson.encodeToString(ship.cargo.inventory),
         fuel_current = ship.fuel.current.toLong(),
         fuel_capacity = ship.fuel.capacity.toLong(),
         frame_name = ship.frameName,
@@ -171,6 +190,27 @@ fun ShipQueries.updateShipNav(nav: ShipNav, shipSymbol: String) {
         route_departure = nav.route.departureTime.toString(),
         route_arrival = nav.route.arrivalTime.toString(),
         // Used in the WHERE clause — must match the primary key of the target row.
+        symbol = shipSymbol
+    )
+}
+
+/**
+ * Updates only the cargo columns for an existing ship row.
+ *
+ * **Pattern:** Partial update extension. Cargo-changing action endpoints (buy, sell, jettison,
+ * extract, transfer) return only the updated [ShipCargo] sub-object, not the full ship. This
+ * extension writes the aggregate counts plus the JSON-serialized inventory, leaving all other
+ * ship columns untouched. Centralising the JSON encoding here (rather than in the repository)
+ * keeps persistence concerns in the DB layer — the repository just passes a domain [ShipCargo].
+ *
+ * @param cargo The updated cargo state to write, including its full inventory.
+ * @param shipSymbol The primary key identifying which row to update.
+ */
+fun ShipQueries.updateShipCargo(cargo: ShipCargo, shipSymbol: String) {
+    updateShipCargo(
+        cargo_units = cargo.units.toLong(),
+        cargo_capacity = cargo.capacity.toLong(),
+        cargo_inventory = cargoInventoryJson.encodeToString(cargo.inventory),
         symbol = shipSymbol
     )
 }

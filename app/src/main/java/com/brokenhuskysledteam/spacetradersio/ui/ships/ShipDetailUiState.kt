@@ -1,5 +1,6 @@
 package com.brokenhuskysledteam.spacetradersio.ui.ships
 
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.CargoItem
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Contract
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.ContractDeliverGood
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavFlightMode
@@ -89,6 +90,8 @@ data class ShipDetailUiState(
  * @property fuelCapacity Maximum fuel capacity of this ship's frame.
  * @property cargoUnits Number of cargo units currently loaded.
  * @property cargoCapacity Maximum cargo capacity in units.
+ * @property cargoInventory The distinct goods currently in the hold, rendered as an itemised
+ *   manifest under the cargo capacity bar. Empty when the hold is empty.
  */
 // UI model for the ship detail screen — flattened from the domain model
 // for easy display without nested object navigation in composables.
@@ -110,7 +113,8 @@ data class ShipDetail(
     val fuelCurrent: Int,
     val fuelCapacity: Int,
     val cargoUnits: Int,
-    val cargoCapacity: Int
+    val cargoCapacity: Int,
+    val cargoInventory: List<CargoItem> = emptyList()
 )
 
 /**
