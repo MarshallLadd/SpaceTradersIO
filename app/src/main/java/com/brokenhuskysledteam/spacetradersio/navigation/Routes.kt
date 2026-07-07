@@ -136,5 +136,13 @@ data class MountsRoute(
     val waypointSymbol: String
 )
 
+/**
+ * Route for the mining screen, parameterized by the ship performing extraction.
+ *
+ * @property shipSymbol The mining-equipped ship (must be in orbit at an asteroid to extract).
+ */
+@Serializable
+data class MiningRoute(val shipSymbol: String)
+
 @Serializable
 object ContractsRoute

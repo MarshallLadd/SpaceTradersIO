@@ -6,6 +6,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.dto.ShipDto
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.AccountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MiningApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
@@ -66,6 +67,7 @@ class E2eSession(
     val fleetApi = FleetApiImpl(client)
     val marketApi = MarketApiImpl(client)
     val mountsApi = MountsApiImpl(client)
+    val miningApi = MiningApiImpl(client)
     val systemsApi = SystemsApiImpl(client)
 
     /** The starting COMMAND ship (the frigate), or the first ship if none is COMMAND. */
@@ -94,6 +96,27 @@ suspend fun E2eSession.arriveAndDock(shipSymbol: String, waypointSymbol: String,
         }
     }
     if (ship.nav.status != "DOCKED") fleetApi.dockShip(shipSymbol)
+    return fleetApi.getMyShip(shipSymbol)
+}
+
+/**
+ * Ensures [shipSymbol] is in orbit at [waypointSymbol], navigating there first if necessary
+ * (polling until arrival). Extraction and surveying require IN_ORBIT (not DOCKED). Returns the
+ * ship's final state.
+ */
+suspend fun E2eSession.arriveAndOrbit(shipSymbol: String, waypointSymbol: String, timeoutMs: Long = 180_000): ShipDto {
+    var ship = fleetApi.getMyShip(shipSymbol)
+    if (ship.nav.waypointSymbol != waypointSymbol) {
+        if (ship.nav.status == "DOCKED") fleetApi.orbitShip(shipSymbol)
+        fleetApi.navigateShip(shipSymbol, waypointSymbol)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            ship = fleetApi.getMyShip(shipSymbol)
+            if (ship.nav.status != "IN_TRANSIT") break
+            delay(3_000)
+        }
+    }
+    if (ship.nav.status != "IN_ORBIT") fleetApi.orbitShip(shipSymbol)
     return fleetApi.getMyShip(shipSymbol)
 }
 

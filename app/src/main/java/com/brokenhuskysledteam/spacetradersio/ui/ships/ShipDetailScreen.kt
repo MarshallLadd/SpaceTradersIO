@@ -68,6 +68,7 @@ fun ShipDetailScreen(
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToMining: (shipSymbol: String) -> Unit = {},
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -77,7 +78,8 @@ fun ShipDetailScreen(
         onNavigateToSystemMap = onNavigateToSystemMap,
         onNavigateToShipyard = onNavigateToShipyard,
         onNavigateToMarket = onNavigateToMarket,
-        onNavigateToMounts = onNavigateToMounts
+        onNavigateToMounts = onNavigateToMounts,
+        onNavigateToMining = onNavigateToMining
     )
 }
 
@@ -108,7 +110,8 @@ fun ShipDetailScreenContent(
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
-    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> }
+    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToMining: (shipSymbol: String) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -177,7 +180,9 @@ fun ShipDetailScreenContent(
                             onEvent(ShipDetailEvent.ViewMarketClicked(systemSymbol, waypointSymbol, marketShipSymbol))
                             onNavigateToMarket(systemSymbol, waypointSymbol, marketShipSymbol)
                         },
-                        onNavigateToMounts = onNavigateToMounts
+                        onNavigateToMounts = onNavigateToMounts,
+                        isAsteroid = uiState.isAsteroid,
+                        onNavigateToMining = onNavigateToMining
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -423,7 +428,9 @@ private fun NavigationCard(
     onNavigateToSystemMap: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit,
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
-    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit
+    onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit,
+    isAsteroid: Boolean,
+    onNavigateToMining: (shipSymbol: String) -> Unit
 ) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
@@ -487,6 +494,15 @@ private fun NavigationCard(
                 onClick = { onNavigateToMounts(ship.symbol, ship.systemSymbol, ship.waypointSymbol) },
                 modifier = Modifier.fillMaxWidth()
             )
+            // Mining is available at asteroid-type waypoints.
+            if (isAsteroid) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TerminalButton(
+                    text = "MINE",
+                    onClick = { onNavigateToMining(ship.symbol) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }

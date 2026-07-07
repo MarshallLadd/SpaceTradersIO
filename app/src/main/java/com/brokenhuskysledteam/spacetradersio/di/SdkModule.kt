@@ -10,6 +10,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MiningApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MiningApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApi
@@ -40,7 +42,15 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStor
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.BuyCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.BuyCargoUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.CreateSurveyUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.CreateSurveyUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ExtractResourcesUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ExtractResourcesUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ExtractWithSurveyUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ExtractWithSurveyUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.JettisonCargoUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.JettisonCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCaseImpl
@@ -264,6 +274,17 @@ object SdkModule {
     @Singleton
     fun provideMountsApi(client: SpaceTradersClient): MountsApi =
         MountsApiImpl(client)
+
+    /**
+     * Provides the [MiningApi] for extraction, surveying, and jettisoning.
+     *
+     * @param client The shared Ktor client wrapper.
+     * @return A singleton [MiningApiImpl] bound to the [MiningApi] interface.
+     */
+    @Provides
+    @Singleton
+    fun provideMiningApi(client: SpaceTradersClient): MiningApi =
+        MiningApiImpl(client)
 
     // -----------------------------------------------------------------------------------------
     // Session-Scoped State (Unscoped — delegates to current session on each injection)
@@ -589,4 +610,30 @@ object SdkModule {
         fleetRepository: FleetRepository,
         agentRepository: AgentRepository
     ): RemoveMountUseCase = RemoveMountUseCaseImpl(mountsApi, fleetRepository, agentRepository)
+
+    // Mining use cases — all unscoped (depend on the session-scoped FleetRepository).
+
+    @Provides
+    fun provideExtractResourcesUseCase(
+        miningApi: MiningApi,
+        fleetRepository: FleetRepository
+    ): ExtractResourcesUseCase = ExtractResourcesUseCaseImpl(miningApi, fleetRepository)
+
+    @Provides
+    fun provideExtractWithSurveyUseCase(
+        miningApi: MiningApi,
+        fleetRepository: FleetRepository
+    ): ExtractWithSurveyUseCase = ExtractWithSurveyUseCaseImpl(miningApi, fleetRepository)
+
+    @Provides
+    fun provideCreateSurveyUseCase(
+        miningApi: MiningApi,
+        fleetRepository: FleetRepository
+    ): CreateSurveyUseCase = CreateSurveyUseCaseImpl(miningApi, fleetRepository)
+
+    @Provides
+    fun provideJettisonCargoUseCase(
+        miningApi: MiningApi,
+        fleetRepository: FleetRepository
+    ): JettisonCargoUseCase = JettisonCargoUseCaseImpl(miningApi, fleetRepository)
 }
