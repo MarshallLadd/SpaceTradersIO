@@ -9,6 +9,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenReposit
 import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.contracts.ContractsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
+import com.brokenhuskysledteam.spacetradersio.ui.galaxy.GalaxyScreen
+import com.brokenhuskysledteam.spacetradersio.ui.jump.JumpScreen
 import com.brokenhuskysledteam.spacetradersio.ui.market.MarketScreen
 import com.brokenhuskysledteam.spacetradersio.ui.mining.MiningScreen
 import com.brokenhuskysledteam.spacetradersio.ui.mounts.MountsScreen
@@ -93,6 +95,9 @@ fun SpaceTradersNavHost(
                 },
                 onNavigateToContracts = {
                     navController.navigate(ContractsRoute)
+                },
+                onNavigateToGalaxy = {
+                    navController.navigate(GalaxyRoute)
                 }
             )
         }
@@ -131,6 +136,9 @@ fun SpaceTradersNavHost(
                 },
                 onNavigateToMining = { shipSymbol ->
                     navController.navigate(MiningRoute(shipSymbol))
+                },
+                onNavigateToJump = { shipSymbol, systemSymbol, waypointSymbol ->
+                    navController.navigate(JumpRoute(shipSymbol, systemSymbol, waypointSymbol))
                 }
             )
         }
@@ -164,6 +172,18 @@ fun SpaceTradersNavHost(
         // Extract/survey resources at an asteroid and jettison unwanted cargo.
         composable<MiningRoute> {
             MiningScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // --- Jump screen ---
+        // Inter-system travel: jump to a connected jump gate.
+        composable<JumpRoute> {
+            JumpScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // --- Galaxy browser ---
+        // Paginated list of star systems.
+        composable<GalaxyRoute> {
+            GalaxyScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- System map screen ---

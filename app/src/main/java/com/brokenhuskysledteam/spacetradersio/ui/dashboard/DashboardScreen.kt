@@ -48,6 +48,7 @@ fun DashboardScreen(
     onNavigateToAuth: () -> Unit,
     onNavigateToShipList: () -> Unit,
     onNavigateToContracts: () -> Unit,
+    onNavigateToGalaxy: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -69,7 +70,8 @@ fun DashboardScreen(
 
     DashboardScreenContent(
         uiState = uiState,
-        onEvent = viewModel::onEvent
+        onEvent = viewModel::onEvent,
+        onGalaxyClick = onNavigateToGalaxy
     )
 }
 
@@ -93,7 +95,8 @@ fun DashboardScreen(
 @Composable
 fun DashboardScreenContent(
     uiState: DashboardUiState,
-    onEvent: (DashboardEvent) -> Unit
+    onEvent: (DashboardEvent) -> Unit,
+    onGalaxyClick: () -> Unit = {}
 ) {
     // Box is the root so ScanlineOverlay can be stacked on top of all content branches
     // using a single overlay declaration rather than repeating it in each branch.
@@ -207,6 +210,15 @@ fun DashboardScreenContent(
                         modifier = Modifier.clickable { onEvent(DashboardEvent.ContractsCardClicked) }
                     ) {
                         TerminalDataRow("STATUS", "TAP TO VIEW")
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TerminalCard(
+                        title = "Galaxy",
+                        modifier = Modifier.clickable { onGalaxyClick() }
+                    ) {
+                        TerminalDataRow("STATUS", "BROWSE SYSTEMS")
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))

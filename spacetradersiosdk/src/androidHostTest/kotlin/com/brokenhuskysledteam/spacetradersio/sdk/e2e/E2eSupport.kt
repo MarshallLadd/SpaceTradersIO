@@ -9,6 +9,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MiningApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.TravelApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.testing.FakeTokenRepository
 import kotlinx.coroutines.delay
 import org.junit.Assume.assumeTrue
@@ -68,6 +69,7 @@ class E2eSession(
     val marketApi = MarketApiImpl(client)
     val mountsApi = MountsApiImpl(client)
     val miningApi = MiningApiImpl(client)
+    val travelApi = TravelApiImpl(client)
     val systemsApi = SystemsApiImpl(client)
 
     /** The starting COMMAND ship (the frigate), or the first ship if none is COMMAND. */
