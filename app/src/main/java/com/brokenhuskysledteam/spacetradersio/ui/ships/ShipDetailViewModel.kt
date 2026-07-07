@@ -9,6 +9,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.Ship
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ContractTab
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.ShipNavStatus
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointTraitSymbol
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.model.enums.WaypointType
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
@@ -95,6 +96,7 @@ class ShipDetailViewModel @Inject constructor(
             error = local.error,
             hasShipyard = local.hasShipyard,
             hasMarketplace = local.hasMarketplace,
+            isAsteroid = local.isAsteroid,
             pendingNegotiate = local.pendingNegotiate,
             activeContracts = local.activeContracts,
             isDeliverDialogOpen = local.isDeliverDialogOpen,
@@ -256,7 +258,8 @@ class ShipDetailViewModel @Inject constructor(
                         _localState.update {
                             it.copy(
                                 hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD },
-                                hasMarketplace = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.MARKETPLACE }
+                                hasMarketplace = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.MARKETPLACE },
+                                isAsteroid = waypoint.type in ASTEROID_TYPES
                             )
                         }
                     }
@@ -331,6 +334,7 @@ class ShipDetailViewModel @Inject constructor(
         val error: String? = null,
         val hasShipyard: Boolean = false,
         val hasMarketplace: Boolean = false,
+        val isAsteroid: Boolean = false,
         val pendingNegotiate: Boolean = false,
         val activeContracts: List<Contract> = emptyList(),
         val isDeliverDialogOpen: Boolean = false,
@@ -356,6 +360,13 @@ class ShipDetailViewModel @Inject constructor(
  * non-null when the ship is actively in transit — preventing stale times from a previous
  * leg from being displayed.
  */
+/** Waypoint types that can be mined at. */
+private val ASTEROID_TYPES = setOf(
+    WaypointType.ASTEROID,
+    WaypointType.ASTEROID_FIELD,
+    WaypointType.ENGINEERED_ASTEROID
+)
+
 private fun Ship.toDetail(): ShipDetail {
     // Only expose arrival/departure times when the ship is actually moving;
     // for docked/orbiting ships these values from the last route leg are misleading.

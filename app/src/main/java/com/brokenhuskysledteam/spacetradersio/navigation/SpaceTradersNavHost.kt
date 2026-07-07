@@ -10,6 +10,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.contracts.ContractsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
 import com.brokenhuskysledteam.spacetradersio.ui.market.MarketScreen
+import com.brokenhuskysledteam.spacetradersio.ui.mining.MiningScreen
 import com.brokenhuskysledteam.spacetradersio.ui.mounts.MountsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
@@ -127,6 +128,9 @@ fun SpaceTradersNavHost(
                 },
                 onNavigateToMounts = { shipSymbol, systemSymbol, waypointSymbol ->
                     navController.navigate(MountsRoute(shipSymbol, systemSymbol, waypointSymbol))
+                },
+                onNavigateToMining = { shipSymbol ->
+                    navController.navigate(MiningRoute(shipSymbol))
                 }
             )
         }
@@ -154,6 +158,12 @@ fun SpaceTradersNavHost(
         // View a ship's installed mounts and install/remove them (when docked at a shipyard).
         composable<MountsRoute> {
             MountsScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // --- Mining screen ---
+        // Extract/survey resources at an asteroid and jettison unwanted cargo.
+        composable<MiningRoute> {
+            MiningScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- System map screen ---
