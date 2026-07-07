@@ -230,6 +230,17 @@ class FleetRepositoryImpl(
             cooldown_expiration = cooldown.expiration?.toString(),
             symbol = shipSymbol
         )
+        // Schedule an auto-refresh when the cooldown expires (mirrors the transit timer in
+        // updateShipNav). This activates the RefreshScheduler for action cooldowns — e.g. after
+        // an extraction the ship refreshes ~1s after the cooldown clears, so the UI reflects that
+        // the ship is ready to act again without the user manually refreshing.
+        cooldown.expiration?.let { expiry ->
+            refreshScheduler.schedule(
+                id = "cooldown:$shipSymbol",
+                expiresAt = expiry,
+                action = { refreshMyShip(shipSymbol) }
+            )
+        }
     }
 
     /**
