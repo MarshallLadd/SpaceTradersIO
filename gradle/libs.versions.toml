@@ -23,6 +23,7 @@ navigationCompose = "2.9.0"
 hiltNavigationCompose = "1.2.0"
 turbine = "1.2.0"
 sqldelight = "2.3.2"
+kermit = "2.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -56,6 +57,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 androidx-runner = { group = "androidx.test", name = "runner", version.ref = "runner" }
 androidx-core = { group = "androidx.test", name = "core", version.ref = "core" }
 napier = { module = "io.github.aakira:napier", version.ref = "napier" }
+kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
 multiplatform-settings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatform-settings" }
 multiplatform-settings-no-arg = { module = "com.russhwolf:multiplatform-settings-no-arg", version.ref = "multiplatform-settings" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
