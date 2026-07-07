@@ -97,6 +97,7 @@ class ShipDetailViewModel @Inject constructor(
             hasShipyard = local.hasShipyard,
             hasMarketplace = local.hasMarketplace,
             isAsteroid = local.isAsteroid,
+            isJumpGate = local.isJumpGate,
             pendingNegotiate = local.pendingNegotiate,
             activeContracts = local.activeContracts,
             isDeliverDialogOpen = local.isDeliverDialogOpen,
@@ -259,7 +260,8 @@ class ShipDetailViewModel @Inject constructor(
                             it.copy(
                                 hasShipyard = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.SHIPYARD },
                                 hasMarketplace = waypoint.traits.any { t -> t.symbol == WaypointTraitSymbol.MARKETPLACE },
-                                isAsteroid = waypoint.type in ASTEROID_TYPES
+                                isAsteroid = waypoint.type in ASTEROID_TYPES,
+                                isJumpGate = waypoint.type == WaypointType.JUMP_GATE
                             )
                         }
                     }
@@ -335,6 +337,7 @@ class ShipDetailViewModel @Inject constructor(
         val hasShipyard: Boolean = false,
         val hasMarketplace: Boolean = false,
         val isAsteroid: Boolean = false,
+        val isJumpGate: Boolean = false,
         val pendingNegotiate: Boolean = false,
         val activeContracts: List<Contract> = emptyList(),
         val isDeliverDialogOpen: Boolean = false,

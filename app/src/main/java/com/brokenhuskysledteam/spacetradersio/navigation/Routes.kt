@@ -144,5 +144,23 @@ data class MountsRoute(
 @Serializable
 data class MiningRoute(val shipSymbol: String)
 
+/**
+ * Route for the jump screen (inter-system travel via a jump gate).
+ *
+ * @property shipSymbol The ship to jump.
+ * @property systemSymbol The ship's current system.
+ * @property waypointSymbol The jump-gate waypoint the ship is at.
+ */
+@Serializable
+data class JumpRoute(
+    val shipSymbol: String,
+    val systemSymbol: String,
+    val waypointSymbol: String
+)
+
+/** Route for the galaxy browser (list of star systems). */
+@Serializable
+object GalaxyRoute
+
 @Serializable
 object ContractsRoute

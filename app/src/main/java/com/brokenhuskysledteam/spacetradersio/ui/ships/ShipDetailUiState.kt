@@ -40,6 +40,7 @@ data class ShipDetailUiState(
     val hasShipyard: Boolean = false,
     val hasMarketplace: Boolean = false,
     val isAsteroid: Boolean = false,
+    val isJumpGate: Boolean = false,
     val pendingNegotiate: Boolean = false,
     val activeContracts: List<Contract> = emptyList(),
     val isDeliverDialogOpen: Boolean = false,

@@ -69,6 +69,7 @@ fun ShipDetailScreen(
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMining: (shipSymbol: String) -> Unit = {},
+    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -79,7 +80,8 @@ fun ShipDetailScreen(
         onNavigateToShipyard = onNavigateToShipyard,
         onNavigateToMarket = onNavigateToMarket,
         onNavigateToMounts = onNavigateToMounts,
-        onNavigateToMining = onNavigateToMining
+        onNavigateToMining = onNavigateToMining,
+        onNavigateToJump = onNavigateToJump
     )
 }
 
@@ -111,7 +113,8 @@ fun ShipDetailScreenContent(
     onNavigateToShipyard: (systemSymbol: String, waypointSymbol: String) -> Unit = { _, _ -> },
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
-    onNavigateToMining: (shipSymbol: String) -> Unit = {}
+    onNavigateToMining: (shipSymbol: String) -> Unit = {},
+    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> }
 ) {
     Box(
         modifier = Modifier
@@ -182,7 +185,9 @@ fun ShipDetailScreenContent(
                         },
                         onNavigateToMounts = onNavigateToMounts,
                         isAsteroid = uiState.isAsteroid,
-                        onNavigateToMining = onNavigateToMining
+                        onNavigateToMining = onNavigateToMining,
+                        isJumpGate = uiState.isJumpGate,
+                        onNavigateToJump = onNavigateToJump
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -430,7 +435,9 @@ private fun NavigationCard(
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit,
     onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit,
     isAsteroid: Boolean,
-    onNavigateToMining: (shipSymbol: String) -> Unit
+    onNavigateToMining: (shipSymbol: String) -> Unit,
+    isJumpGate: Boolean,
+    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit
 ) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
@@ -500,6 +507,15 @@ private fun NavigationCard(
                 TerminalButton(
                     text = "MINE",
                     onClick = { onNavigateToMining(ship.symbol) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            // Inter-system travel via a jump gate.
+            if (isJumpGate) {
+                Spacer(modifier = Modifier.height(8.dp))
+                TerminalButton(
+                    text = "JUMP GATE",
+                    onClick = { onNavigateToJump(ship.symbol, ship.systemSymbol, ship.waypointSymbol) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

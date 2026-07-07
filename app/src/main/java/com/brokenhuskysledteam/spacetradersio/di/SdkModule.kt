@@ -18,6 +18,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.TravelApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.TravelApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SpaceTradersDatabase
 import com.brokenhuskysledteam.spacetradersio.sdk.data.db.SqlDriverFactory
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.AgentRepositoryImpl
@@ -26,6 +28,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositor
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.MarketRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.MountsRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ShipyardRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TravelRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
@@ -33,6 +36,7 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetReposit
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.MarketRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.MountsRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ShipyardRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TravelRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.scheduler.RefreshScheduler
@@ -70,6 +74,10 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUs
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RemoveMountUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RemoveMountUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.JumpShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.JumpShipUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.WarpShipUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.WarpShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.SellCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.SellCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
@@ -286,6 +294,14 @@ object SdkModule {
     fun provideMiningApi(client: SpaceTradersClient): MiningApi =
         MiningApiImpl(client)
 
+    /**
+     * Provides the [TravelApi] for warp, jump, jump-gate connections, and galaxy browsing.
+     */
+    @Provides
+    @Singleton
+    fun provideTravelApi(client: SpaceTradersClient): TravelApi =
+        TravelApiImpl(client)
+
     // -----------------------------------------------------------------------------------------
     // Session-Scoped State (Unscoped — delegates to current session on each injection)
     // -----------------------------------------------------------------------------------------
@@ -419,6 +435,12 @@ object SdkModule {
     @Singleton
     fun provideMountsRepository(mountsApi: MountsApi): MountsRepository =
         MountsRepositoryImpl(mountsApi)
+
+    /** Provides the read-through [TravelRepository]. `@Singleton` — depends only on [TravelApi]. */
+    @Provides
+    @Singleton
+    fun provideTravelRepository(travelApi: TravelApi): TravelRepository =
+        TravelRepositoryImpl(travelApi)
 
     // -----------------------------------------------------------------------------------------
     // Use Cases
@@ -636,4 +658,18 @@ object SdkModule {
         miningApi: MiningApi,
         fleetRepository: FleetRepository
     ): JettisonCargoUseCase = JettisonCargoUseCaseImpl(miningApi, fleetRepository)
+
+    // Inter-system travel use cases — unscoped (depend on the session-scoped FleetRepository).
+
+    @Provides
+    fun provideWarpShipUseCase(
+        travelApi: TravelApi,
+        fleetRepository: FleetRepository
+    ): WarpShipUseCase = WarpShipUseCaseImpl(travelApi, fleetRepository)
+
+    @Provides
+    fun provideJumpShipUseCase(
+        travelApi: TravelApi,
+        fleetRepository: FleetRepository
+    ): JumpShipUseCase = JumpShipUseCaseImpl(travelApi, fleetRepository)
 }
