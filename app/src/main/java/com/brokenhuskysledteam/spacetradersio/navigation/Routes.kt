@@ -162,5 +162,13 @@ data class JumpRoute(
 @Serializable
 object GalaxyRoute
 
+/**
+ * Route for the scan/chart screen.
+ *
+ * @property shipSymbol The scanning ship (needs a sensor-array mount).
+ */
+@Serializable
+data class ScanRoute(val shipSymbol: String)
+
 @Serializable
 object ContractsRoute

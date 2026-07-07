@@ -14,6 +14,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.jump.JumpScreen
 import com.brokenhuskysledteam.spacetradersio.ui.market.MarketScreen
 import com.brokenhuskysledteam.spacetradersio.ui.mining.MiningScreen
 import com.brokenhuskysledteam.spacetradersio.ui.mounts.MountsScreen
+import com.brokenhuskysledteam.spacetradersio.ui.scan.ScanScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
 import com.brokenhuskysledteam.spacetradersio.ui.shipyard.ShipyardScreen
@@ -139,6 +140,9 @@ fun SpaceTradersNavHost(
                 },
                 onNavigateToJump = { shipSymbol, systemSymbol, waypointSymbol ->
                     navController.navigate(JumpRoute(shipSymbol, systemSymbol, waypointSymbol))
+                },
+                onNavigateToScan = { shipSymbol ->
+                    navController.navigate(ScanRoute(shipSymbol))
                 }
             )
         }
@@ -184,6 +188,12 @@ fun SpaceTradersNavHost(
         // Paginated list of star systems.
         composable<GalaxyRoute> {
             GalaxyScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // --- Scan screen ---
+        // Scan nearby systems/waypoints and chart the current waypoint.
+        composable<ScanRoute> {
+            ScanScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- System map screen ---

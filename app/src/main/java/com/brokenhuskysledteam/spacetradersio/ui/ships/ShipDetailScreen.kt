@@ -70,6 +70,7 @@ fun ShipDetailScreen(
     onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMining: (shipSymbol: String) -> Unit = {},
     onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToScan: (shipSymbol: String) -> Unit = {},
     viewModel: ShipDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,7 +82,8 @@ fun ShipDetailScreen(
         onNavigateToMarket = onNavigateToMarket,
         onNavigateToMounts = onNavigateToMounts,
         onNavigateToMining = onNavigateToMining,
-        onNavigateToJump = onNavigateToJump
+        onNavigateToJump = onNavigateToJump,
+        onNavigateToScan = onNavigateToScan
     )
 }
 
@@ -114,7 +116,8 @@ fun ShipDetailScreenContent(
     onNavigateToMarket: (systemSymbol: String, waypointSymbol: String, shipSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMounts: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
     onNavigateToMining: (shipSymbol: String) -> Unit = {},
-    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> }
+    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit = { _, _, _ -> },
+    onNavigateToScan: (shipSymbol: String) -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -187,7 +190,8 @@ fun ShipDetailScreenContent(
                         isAsteroid = uiState.isAsteroid,
                         onNavigateToMining = onNavigateToMining,
                         isJumpGate = uiState.isJumpGate,
-                        onNavigateToJump = onNavigateToJump
+                        onNavigateToJump = onNavigateToJump,
+                        onNavigateToScan = onNavigateToScan
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -437,7 +441,8 @@ private fun NavigationCard(
     isAsteroid: Boolean,
     onNavigateToMining: (shipSymbol: String) -> Unit,
     isJumpGate: Boolean,
-    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit
+    onNavigateToJump: (shipSymbol: String, systemSymbol: String, waypointSymbol: String) -> Unit,
+    onNavigateToScan: (shipSymbol: String) -> Unit
 ) {
     TerminalCard(title = "Navigation") {
         ShipDetailDataRow("STATUS", ship.navStatus.name)
@@ -519,6 +524,13 @@ private fun NavigationCard(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+            // Scanning & charting (requires a sensor-array mount; works from orbit).
+            Spacer(modifier = Modifier.height(8.dp))
+            TerminalButton(
+                text = "SCAN",
+                onClick = { onNavigateToScan(ship.symbol) },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

@@ -14,6 +14,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MiningApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MiningApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ScanApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ScanApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
@@ -46,8 +48,14 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.state.WaypointStateStor
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.AcceptContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.BuyCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.BuyCargoUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ChartWaypointUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ChartWaypointUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.CreateSurveyUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.CreateSurveyUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ScanSystemsUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ScanSystemsUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ScanWaypointsUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ScanWaypointsUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DeliverCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ExtractResourcesUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.ExtractResourcesUseCaseImpl
@@ -301,6 +309,12 @@ object SdkModule {
     @Singleton
     fun provideTravelApi(client: SpaceTradersClient): TravelApi =
         TravelApiImpl(client)
+
+    /** Provides the [ScanApi] for scanning systems/waypoints and charting. */
+    @Provides
+    @Singleton
+    fun provideScanApi(client: SpaceTradersClient): ScanApi =
+        ScanApiImpl(client)
 
     // -----------------------------------------------------------------------------------------
     // Session-Scoped State (Unscoped — delegates to current session on each injection)
@@ -672,4 +686,24 @@ object SdkModule {
         travelApi: TravelApi,
         fleetRepository: FleetRepository
     ): JumpShipUseCase = JumpShipUseCaseImpl(travelApi, fleetRepository)
+
+    // Scanning & charting use cases. Scans are unscoped (depend on FleetRepository for cooldown);
+    // chart depends only on ScanApi.
+
+    @Provides
+    fun provideScanSystemsUseCase(
+        scanApi: ScanApi,
+        fleetRepository: FleetRepository
+    ): ScanSystemsUseCase = ScanSystemsUseCaseImpl(scanApi, fleetRepository)
+
+    @Provides
+    fun provideScanWaypointsUseCase(
+        scanApi: ScanApi,
+        fleetRepository: FleetRepository
+    ): ScanWaypointsUseCase = ScanWaypointsUseCaseImpl(scanApi, fleetRepository)
+
+    @Provides
+    @Singleton
+    fun provideChartWaypointUseCase(scanApi: ScanApi): ChartWaypointUseCase =
+        ChartWaypointUseCaseImpl(scanApi)
 }
