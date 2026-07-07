@@ -1290,6 +1290,15 @@ The market ViewModel holds the fetched `Market` in its `LocalState` (a one-shot 
 
 Buy and sell are use cases, not repository methods, because a single trade touches two repositories: `BuyCargoUseCase`/`SellCargoUseCase` mirror `RefuelShipUseCase` exactly — the `POST /purchase` or `/sell` response returns `{cargo, agent, transaction}`, and the use case distributes `cargo` to `FleetRepository` and `agent` to `AgentRepository` (and returns the transaction). Like the refuel use case, they are unscoped in Hilt because they depend on the session-scoped `FleetRepository`.
 
+### Cooldown Auto-Refresh (Extraction & Surveying)
+
+The `RefreshScheduler` was built to watch two kinds of time-bounded server state: transit and cooldown. Transit was wired from the start (`updateShipNav` schedules a `transit:$ship` timer when a ship goes `IN_TRANSIT`). Cooldown became live with mining: `FleetRepositoryImpl.updateShipCooldown` now schedules a `cooldown:$ship` timer when the cooldown has an `expiration`, so after an extraction or survey the ship auto-refreshes ~1 second after the cooldown clears.
+
+This makes the mining UI reactive for free: the mining ViewModel derives `onCooldown = ship.cooldown.expiration != null` from the observed ship, disables EXTRACT/SURVEY while a cooldown is active, and — because the scheduler refreshes the ship the moment the cooldown expires (setting `expiration` back to null) — the buttons re-enable themselves with no user action.
+
+> ⚠️ **Gotcha — far-future cooldown expirations in test fixtures:**
+> Same rule as transit `arrivalTime`: any test that drives a cooldown update must use a far-future `expiration` (e.g. `2099-01-01T00:00:00Z`). A past expiry makes the scheduler fire `delay(0)` immediately and call `refreshMyShip`, which in a test with a stub API throws or re-schedules — flaking or hanging the test.
+
 ### Cargo Inventory Persistence (JSON Column)
 
 A ship's `cargo.inventory` (`List<CargoItem>`) is persisted as a single JSON string in the `cargo_inventory TEXT` column on the `ship` row, rather than a separate child table. This is deliberate: cargo inventory is a value list bound 1:1 to a ship, always read and written together with the aggregate `cargo_units`/`cargo_capacity`, and never queried on its own. That is exactly the shape where a serialized column is simpler and cheaper than relational rows — it keeps the surgical `updateShipCargo` a single-row `UPDATE` instead of multi-table transaction choreography. `ShipDbMapper` owns the `Json` encode/decode, and `CargoItem` is annotated `@Serializable` solely to support this column.
