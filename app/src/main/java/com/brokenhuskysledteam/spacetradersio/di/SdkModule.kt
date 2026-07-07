@@ -10,6 +10,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.FleetApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MarketApiImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApi
+import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.MountsApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApi
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.ShipyardApiImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.api.endpoints.SystemsApi
@@ -20,12 +22,14 @@ import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.AgentRepositor
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ContractRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.FleetRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.MarketRepositoryImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.MountsRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.ShipyardRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.SystemRepositoryImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.AgentRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ContractRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.FleetRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.MarketRepository
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.MountsRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.ShipyardRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.SystemRepository
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.repository.TokenRepository
@@ -42,6 +46,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.DockShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.FulfillContractUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.GetMyContractsUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.InstallMountUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.InstallMountUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NavigateShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.NegotiateContractUseCase
@@ -52,6 +58,8 @@ import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCa
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RefuelShipUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RegisterAgentUseCaseImpl
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RemoveMountUseCase
+import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.RemoveMountUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.SellCargoUseCase
 import com.brokenhuskysledteam.spacetradersio.sdk.domain.usecase.SellCargoUseCaseImpl
 import com.brokenhuskysledteam.spacetradersio.sdk.data.repository.TokenRepositoryImpl
@@ -246,6 +254,17 @@ object SdkModule {
     fun provideMarketApi(client: SpaceTradersClient): MarketApi =
         MarketApiImpl(client)
 
+    /**
+     * Provides the [MountsApi] implementation for viewing and installing/removing ship mounts.
+     *
+     * @param client The shared Ktor client wrapper.
+     * @return A singleton [MountsApiImpl] bound to the [MountsApi] interface.
+     */
+    @Provides
+    @Singleton
+    fun provideMountsApi(client: SpaceTradersClient): MountsApi =
+        MountsApiImpl(client)
+
     // -----------------------------------------------------------------------------------------
     // Session-Scoped State (Unscoped — delegates to current session on each injection)
     // -----------------------------------------------------------------------------------------
@@ -370,6 +389,15 @@ object SdkModule {
     @Singleton
     fun provideMarketRepository(marketApi: MarketApi): MarketRepository =
         MarketRepositoryImpl(marketApi)
+
+    /**
+     * Provides the [MountsRepository] for reading a ship's mounts. `@Singleton` is safe — it
+     * depends only on the singleton [MountsApi] and holds no session state.
+     */
+    @Provides
+    @Singleton
+    fun provideMountsRepository(mountsApi: MountsApi): MountsRepository =
+        MountsRepositoryImpl(mountsApi)
 
     // -----------------------------------------------------------------------------------------
     // Use Cases
@@ -541,4 +569,24 @@ object SdkModule {
         fleetRepository: FleetRepository,
         agentRepository: AgentRepository
     ): SellCargoUseCase = SellCargoUseCaseImpl(marketApi, fleetRepository, agentRepository)
+
+    /**
+     * Provides the [InstallMountUseCase]. Unscoped (depends on the session-scoped [FleetRepository]).
+     */
+    @Provides
+    fun provideInstallMountUseCase(
+        mountsApi: MountsApi,
+        fleetRepository: FleetRepository,
+        agentRepository: AgentRepository
+    ): InstallMountUseCase = InstallMountUseCaseImpl(mountsApi, fleetRepository, agentRepository)
+
+    /**
+     * Provides the [RemoveMountUseCase]. Unscoped for the same reason as [provideInstallMountUseCase].
+     */
+    @Provides
+    fun provideRemoveMountUseCase(
+        mountsApi: MountsApi,
+        fleetRepository: FleetRepository,
+        agentRepository: AgentRepository
+    ): RemoveMountUseCase = RemoveMountUseCaseImpl(mountsApi, fleetRepository, agentRepository)
 }

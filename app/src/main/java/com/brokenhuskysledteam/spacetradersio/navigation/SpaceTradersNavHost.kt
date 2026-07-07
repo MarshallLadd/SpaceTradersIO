@@ -10,6 +10,7 @@ import com.brokenhuskysledteam.spacetradersio.ui.auth.AuthScreen
 import com.brokenhuskysledteam.spacetradersio.ui.contracts.ContractsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.dashboard.DashboardScreen
 import com.brokenhuskysledteam.spacetradersio.ui.market.MarketScreen
+import com.brokenhuskysledteam.spacetradersio.ui.mounts.MountsScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipDetailScreen
 import com.brokenhuskysledteam.spacetradersio.ui.ships.ShipListScreen
 import com.brokenhuskysledteam.spacetradersio.ui.shipyard.ShipyardScreen
@@ -123,6 +124,9 @@ fun SpaceTradersNavHost(
                 },
                 onNavigateToMarket = { systemSymbol, waypointSymbol, shipSymbol ->
                     navController.navigate(MarketRoute(systemSymbol, waypointSymbol, shipSymbol))
+                },
+                onNavigateToMounts = { shipSymbol, systemSymbol, waypointSymbol ->
+                    navController.navigate(MountsRoute(shipSymbol, systemSymbol, waypointSymbol))
                 }
             )
         }
@@ -144,6 +148,12 @@ fun SpaceTradersNavHost(
         // Navigation Compose deserializes systemSymbol, waypointSymbol, and shipSymbol from the route.
         composable<MarketRoute> {
             MarketScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        // --- Mounts screen ---
+        // View a ship's installed mounts and install/remove them (when docked at a shipyard).
+        composable<MountsRoute> {
+            MountsScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // --- System map screen ---
