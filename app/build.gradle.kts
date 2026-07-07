@@ -47,6 +47,10 @@ dependencies {
     // SDK module
     implementation(project(":spacetradersiosdk"))
     implementation(files("../libs/loggerkit-release.aar"))
+    // loggerkit-release.aar is a local .aar and carries no transitive dependency metadata,
+    // so its Kermit dependency must be declared explicitly here — otherwise co.touchlab.kermit.*
+    // is missing at runtime and LoggerKit's static init throws NoClassDefFoundError on launch.
+    implementation(libs.kermit)
 
     // SDK transitive deps needed for DI wiring
     implementation(libs.multiplatform.settings.no.arg)
